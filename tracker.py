@@ -307,17 +307,18 @@ PAGE = r"""
  .waste .warn{color:#c9a36a;font-size:12px;line-height:1.45;margin:8px 0 4px}
  .fight-overlay{position:fixed;inset:0;background:rgba(0,0,0,.82);z-index:50;display:flex;align-items:center;justify-content:center;padding:12px;box-sizing:border-box}
  .fight-overlay[hidden]{display:none!important}
- .fight-modal{position:relative;width:100%;max-width:520px;max-height:100vh;max-height:100dvh;overflow:auto;background:#0b0614;border:2px solid #e8c56b;border-radius:16px;padding:8px 12px 12px;box-sizing:border-box;-webkit-overflow-scrolling:touch}
+ .fight-modal{position:relative;width:100%;max-width:520px;max-height:100vh;max-height:100dvh;overflow:auto;background:#0b0614;border:2px solid #e8c56b;border-radius:16px;padding:8px 12px 12px;box-sizing:border-box;-webkit-overflow-scrolling:touch;container-type:inline-size;container-name:fightmodal;-webkit-text-size-adjust:100%;text-size-adjust:100%}
  .fight-toolbar{height:32px;position:relative;margin-bottom:6px}
  .fight-close{position:absolute;top:0;right:0;width:32px;height:32px;border:0;border-radius:8px;background:#2a3240;color:#e8ecf1;font-size:22px;line-height:1;cursor:pointer;z-index:8}
- .fight-stage{position:relative;width:100%;aspect-ratio:16/9;border-radius:10px;overflow:hidden;background:#040014 center/100% 100% no-repeat;image-rendering:auto;box-shadow:inset 0 0 40px rgba(0,0,0,.45)}
+ .fight-stage{position:relative;width:100%;aspect-ratio:16/9;border-radius:10px;overflow:hidden;background:#040014 center/100% 100% no-repeat;image-rendering:auto;box-shadow:inset 0 0 40px rgba(0,0,0,.45);container-type:size;container-name:fight}
+ .fight-world{position:absolute;left:0;top:0;width:492px;height:276.75px;transform-origin:0 0;transform:scale(calc(100cqw / 492));-webkit-text-size-adjust:100%;text-size-adjust:100%}
  .fight-stage.shake{animation:fightshake .35s}
  .fight-flash{position:absolute;inset:0;background:#fff6c0;opacity:0;pointer-events:none;z-index:7}
  .fight-stage.flash .fight-flash{animation:fightflash .28s}
  @keyframes fightshake{0%,100%{transform:translate(0,0)}20%{transform:translate(-7px,3px)}40%{transform:translate(7px,-4px)}60%{transform:translate(-5px,-2px)}80%{transform:translate(5px,3px)}}
  @keyframes fightflash{0%{opacity:.85}100%{opacity:0}}
  .smash-hud{position:absolute;bottom:6px;left:8px;right:8px;display:flex;justify-content:space-between;gap:8px;pointer-events:none;z-index:8}
- .p-hud{background:rgba(8,6,18,.82);border:2px solid #e8e8f0;border-radius:8px;padding:3px 10px 2px;min-width:100px;box-shadow:0 2px 0 #000}
+ .p-hud{background:rgba(8,6,18,.82);border:2px solid #e8e8f0;border-radius:8px;padding:3px 10px 2px;min-width:100px;max-width:38%;box-sizing:border-box;flex:0 1 auto;box-shadow:0 2px 0 #000;-webkit-text-size-adjust:100%;text-size-adjust:100%}
  .p-hud.p1{border-color:#7ec8ff}
  .p-hud.p2{border-color:#ffd36b;text-align:right}
  .p-tag{font-size:9px;letter-spacing:.14em;color:#9aa;font-weight:800}
@@ -365,11 +366,11 @@ PAGE = r"""
  .blast{position:absolute;width:90px;height:90px;margin-left:-45px;margin-top:-45px;border-radius:50%;background:radial-gradient(circle,#fff 0 8%,#ffe56a 18%,#ff6a3a 40%,transparent 70%);opacity:0;z-index:6;pointer-events:none}
  .blast.show{animation:blastpop .5s ease-out forwards}
  @keyframes blastpop{0%{transform:scale(.4);opacity:1}100%{transform:scale(1.6);opacity:0}}
- .fight-banner{display:none;text-align:center;margin:10px 0 4px;font-size:26px;font-weight:900;letter-spacing:.08em;color:#ffe56a;text-shadow:3px 3px 0 #6b1d1d,0 0 12px rgba(255,229,106,.4);animation:bannerpop .35s ease-out}
+ .fight-banner{display:none;text-align:center;margin:2cqi 0 0.8cqi;font-size:clamp(16px,5cqi,26px);font-weight:900;letter-spacing:.08em;color:#ffe56a;text-shadow:3px 3px 0 #6b1d1d,0 0 12px rgba(255,229,106,.4);animation:bannerpop .35s ease-out}
  .fight-banner.show{display:block}
   .fight-sub,.move-callout{display:none!important}
  @keyframes bannerpop{from{transform:scale(.6);opacity:0}to{transform:scale(1);opacity:1}}
- .fight-replay{display:block;margin:12px auto 0;padding:10px 18px;border-radius:999px;border:1px solid #e8c56b;background:#2a3240;color:#ffe9a3;font-weight:700;font-size:14px;cursor:pointer}
+ .fight-replay{display:block;margin:2.3cqi auto 0;padding:2cqi 3.5cqi;border-radius:999px;border:1px solid #e8c56b;background:#2a3240;color:#ffe9a3;font-weight:700;font-size:clamp(12px,2.7cqi,14px);cursor:pointer}
  @media (prefers-reduced-motion:reduce){
    .fight-stage.shake,.fight-stage.flash .fight-flash,.fight-banner,.move-callout,.ko-mark,.blade-trail,.tipper-spark,.dolphin-arc,.qa-streak,.blast,.p-pct.pop{animation:none!important}
    .sprite{animation:none!important}
@@ -419,6 +420,7 @@ PAGE = r"""
  <div class="fight-modal" role="dialog" aria-modal="true" aria-label="Fight">
   <div class="fight-toolbar"><button type="button" class="fight-close" aria-label="Close">&times;</button></div>
   <div class="fight-stage">
+   <div class="fight-world">
    <div class="fighter roman"><div class="fighter-art"></div></div>
    <div class="fighter morty"><div class="fighter-art"></div></div>
    <div class="blade-trail"></div>
@@ -436,6 +438,7 @@ PAGE = r"""
    <div class="smash-hud">
     <div class="p-hud p1"><div class="p-tag">P1</div><div class="p-name">ROMAN</div><div class="p-pct" id="roman-pct">0%</div></div>
     <div class="p-hud p2"><div class="p-tag">P2</div><div class="p-name">MORTY</div><div class="p-pct" id="morty-pct">0%</div></div>
+   </div>
    </div>
   </div>
   <div class="fight-banner">ROMAN WINS!</div>
@@ -577,6 +580,16 @@ const FIGHT = __FIGHT__;
  if(!overlay||!FIGHT||!FIGHT.roman) return;
  const reduce=window.matchMedia&&window.matchMedia('(prefers-reduced-motion: reduce)').matches;
  const stage=overlay.querySelector('.fight-stage');
+ const world=stage.querySelector('.fight-world');
+ const FIGHT_REF_W=492;
+ function scaleFightWorld(){
+  if(!world) return;
+  const w=stage.clientWidth||0;
+  if(!w) return;
+  world.style.transform='scale('+(w/FIGHT_REF_W)+')';
+ }
+ if(window.ResizeObserver) new ResizeObserver(scaleFightWorld).observe(stage);
+ window.addEventListener('resize', scaleFightWorld);
  const banner=overlay.querySelector('.fight-banner');
  const sub=overlay.querySelector('.fight-sub');
  const callout=overlay.querySelector('.move-callout');
@@ -1211,7 +1224,7 @@ const FIGHT = __FIGHT__;
  function spawnGhost(fromEl){
   const g=fromEl.cloneNode(true);
   g.classList.add('ghost');
-  stage.appendChild(g);
+  (world||stage).appendChild(g);
   ghosts.push(g);
   setTimeout(function(){ if(g.parentNode) g.parentNode.removeChild(g); }, 260);
  }
@@ -1389,6 +1402,7 @@ const FIGHT = __FIGHT__;
  function openFight(optId, seek, paused, fromUrl){
   overlay.hidden=false;
   document.body.style.overflow='hidden';
+  scaleFightWorld();
   play(optId, seek, paused, fromUrl);
  }
  function closeFight(){
