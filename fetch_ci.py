@@ -199,6 +199,104 @@ def _write_probe(payload: dict) -> None:
     print(f"Wrote DP probe to {dest.relative_to(HERE)}")
 
 
+
+STATUS_SAVE = HERE / "status.json"
+PUBLIC_STATUS = HERE / "public" / "status.json"
+MAX_STATUS_HISTORY = 500
+
+
+def _bitmap_bits(value):
+    try:
+        n = int(value)
+    except (TypeError, ValueError):
+        return []
+    bits = []
+    i = 0
+    while n and i < 32:
+        if n & 1:
+            bits.append(i)
+        n >>= 1
+        i += 1
+    return bits
+
+
+def _ms_to_iso(ms):
+    if ms in (None, "", 0):
+        return None
+    try:
+        t = float(ms)
+    except (TypeError, ValueError):
+        return None
+    if t > 1e12:
+        t = t / 1000.0
+    return datetime.fromtimestamp(t, LOCAL_TZ).isoformat()
+
+
+def _extract_dps(device_get_response):
+    """Pull only DP 7/21/22 (and their timestamps) from a device.get payload."""
+    if not isinstance(device_get_response, dict):
+        return None
+    result = device_get_response.get("result") or device_get_response
+    info = None
+    if isinstance(result, dict):
+        info = result.get("dataPointInfo") or result.get("data_point_info")
+        if info is None and "dps" in result:
+            info = result
+    if not isinstance(info, dict):
+        return None
+    dps = info.get("dps") or {}
+    times = info.get("dpsTime") or info.get("dps_time") or {}
+    if not dps:
+        return None
+    # Keys may be str or int depending on the client.
+    def pick(src, key):
+        if key in src:
+            return src[key]
+        ik = int(key) if str(key).isdigit() else key
+        if ik in src:
+            return src[ik]
+        return src.get(str(key))
+
+    rec = {
+        "recorded_at": datetime.now(LOCAL_TZ).isoformat(),
+        "dp7": pick(dps, "7"),
+        "dp21": pick(dps, "21"),
+        "dp22": pick(dps, "22"),
+        "dp21_bits": _bitmap_bits(pick(dps, "21")),
+        "dp22_bits": _bitmap_bits(pick(dps, "22")),
+        "dp7_changed_at": _ms_to_iso(pick(times, "7")),
+        "dp21_changed_at": _ms_to_iso(pick(times, "21")),
+        "dp22_changed_at": _ms_to_iso(pick(times, "22")),
+    }
+    return rec
+
+
+def _append_device_status(device_get_response) -> None:
+    """Append a redacted status snapshot. Never stores keys or the full device record."""
+    rec = _extract_dps(device_get_response)
+    if rec is None:
+        print("status.json: no DP 7/21/22 values in device.get response")
+        return
+    hist = []
+    if STATUS_SAVE.is_file():
+        try:
+            data = json.loads(STATUS_SAVE.read_text())
+            if isinstance(data, dict):
+                hist = list(data.get("history") or [])
+            elif isinstance(data, list):
+                hist = data
+        except Exception:
+            hist = []
+    hist.append(rec)
+    hist = hist[-MAX_STATUS_HISTORY:]
+    payload = {"history": hist}
+    text = json.dumps(payload, indent=2, default=str)
+    STATUS_SAVE.write_text(text)
+    PUBLIC_STATUS.parent.mkdir(parents=True, exist_ok=True)
+    PUBLIC_STATUS.write_text(text)
+    print(f"Appended status snapshot ({len(hist)} records) to {STATUS_SAVE.name}")
+
+
 async def _probe_dps(session, credentials, device_id: str) -> None:
     """Read-only extra queries. Never writes a DP or changes box settings."""
     from petsafe_standalone.vendor.client import TuyaMobileClient
@@ -261,6 +359,13 @@ async def _probe_dps(session, credentials, device_id: str) -> None:
 
         # Full device record (schema / current DPs often included). localKey is redacted.
         await try_call("device_get", "thing.m.device.get", {"devId": device_id}, "4.1")
+
+        try:
+            dg = report["calls"].get("device_get") or {}
+            if dg.get("ok"):
+                _append_device_status(dg.get("response"))
+        except Exception as exc:
+            print(f"status.json update failed (non-fatal): {type(exc).__name__}")
 
         # History across the published SmartSpin DP set, including 21/22 bin-full candidates.
         # DP102 visit history is still fetched separately above and is unchanged.

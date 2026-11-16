@@ -54,11 +54,11 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add litter-log.json
+          git add litter-log.json status.json
           if git diff --staged --quiet; then
-            echo "No litter-log.json changes to commit."
+            echo "No litter-log.json or status.json changes to commit."
           else
-            git commit -m "Update litter-log.json"
+            git commit -m "Update litter-log.json and status.json"
             git push
           fi
 
