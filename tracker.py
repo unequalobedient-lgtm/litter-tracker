@@ -142,6 +142,8 @@ def main():
             "</div>"
             f"{flag}"
             '<div class="ranges" role="tablist" aria-label="Chart range">'
+            '<button type="button" class="rangebtn" data-days="1">1 day</button>'
+            '<button type="button" class="rangebtn" data-days="7">1 week</button>'
             '<button type="button" class="rangebtn active" data-days="30">30 days</button>'
             '<button type="button" class="rangebtn" data-days="90">90 days</button>'
             '<button type="button" class="rangebtn" data-days="180">6 months</button>'
