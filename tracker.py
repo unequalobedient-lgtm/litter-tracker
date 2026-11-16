@@ -335,6 +335,7 @@ PAGE = r"""
  .fighter{position:absolute;width:0;height:0;z-index:3;pointer-events:none}
  .fighter-art{position:absolute;left:0;bottom:0;background-repeat:no-repeat;image-rendering:pixelated;image-rendering:crisp-edges;transform-origin:var(--ax) var(--ay)}
  .fighter.sparking .fighter-art{filter:drop-shadow(0 0 6px #ffe56a) drop-shadow(0 0 12px #39f)}
+.fighter.countering .fighter-art{filter:drop-shadow(0 0 8px #e8f0ff) drop-shadow(0 0 16px #8bf)}
  .fighter.ghost{opacity:.4;z-index:2}
  .ko-mark{position:absolute;z-index:6;font-weight:900;letter-spacing:.14em;color:#ff4a4a;font-size:18px;text-shadow:2px 2px 0 #000;opacity:0;pointer-events:none}
  .ko-mark.show{opacity:1;animation:calloutpop .3s ease-out}
@@ -366,9 +367,7 @@ PAGE = r"""
  @keyframes blastpop{0%{transform:scale(.4);opacity:1}100%{transform:scale(1.6);opacity:0}}
  .fight-banner{display:none;text-align:center;margin:10px 0 4px;font-size:26px;font-weight:900;letter-spacing:.08em;color:#ffe56a;text-shadow:3px 3px 0 #6b1d1d,0 0 12px rgba(255,229,106,.4);animation:bannerpop .35s ease-out}
  .fight-banner.show{display:block}
- .fight-banner.draw{color:#e8ecf1;text-shadow:3px 3px 0 #2a3240,0 0 12px rgba(200,210,255,.4)}
- .fight-sub{display:none;text-align:center;color:#c5cdd8;font-size:11px;letter-spacing:.12em;font-weight:700;margin-top:2px}
- .fight-sub.show{display:block}
+  .fight-sub,.move-callout{display:none!important}
  @keyframes bannerpop{from{transform:scale(.6);opacity:0}to{transform:scale(1);opacity:1}}
  .fight-replay{display:block;margin:12px auto 0;padding:10px 18px;border-radius:999px;border:1px solid #e8c56b;background:#2a3240;color:#ffe9a3;font-weight:700;font-size:14px;cursor:pointer}
  @media (prefers-reduced-motion:reduce){
@@ -626,7 +625,7 @@ const FIGHT = __FIGHT__;
     Morty: 0 crouch/ready, 1 lunge, 2 buzzsaw, 3 jolt throw, 4 victory/spark */
  const OUTCOMES=[
   {
-   id:'dancing-blade', banner:'ROMAN WINS!', sub:'TIPPERED DANCING BLADE', winner:'roman',
+   id:'dancing-blade', banner:'ROMAN WINS!', winner:'roman',
    keys:[
     {t:0, r:{x:26,y:0,rot:0,frame:0}, m:{x:74,y:0,rot:0,frame:0}, rp:0, mp:0},
     {t:280, r:{x:38,y:0,frame:0}},
@@ -642,7 +641,7 @@ const FIGHT = __FIGHT__;
    ]
   },
   {
-   id:'grab-thunder', banner:'MORTY WINS!', sub:'DOWN THROW  \u2192  THUNDER', winner:'morty',
+   id:'grab-thunder', banner:'MORTY WINS!', winner:'morty',
    keys:[
     {t:0, r:{x:28,y:0,rot:0,frame:0}, m:{x:76,y:0,rot:0,frame:0}, rp:0, mp:0},
     {t:200, callout:'QUICK ATTACK', qa:{x:70,y:16,w:30,rot:200}, afterimage:'morty', m:{x:48,y:18,frame:1}},
@@ -663,27 +662,30 @@ const FIGHT = __FIGHT__;
    ]
   },
   {
-   id:'trade', banner:'DRAW!', sub:'FORWARD SMASH  VS  THUNDER', winner:'draw',
+   id:'counter', banner:'ROMAN WINS!', winner:'roman',
    keys:[
     {t:0, r:{x:26,y:0,rot:0,frame:0}, m:{x:74,y:0,rot:0,frame:0}, rp:0, mp:0},
-    {t:300, r:{x:40,y:0,frame:2}, impact:1, trail:{color:'blue',x:54,y:12,rot:-12}, mp:12, m:{x:80,y:4,rot:10,frame:0}},
-    {t:700, callout:'QUICK ATTACK', qa:{x:78,y:14,w:22,rot:190}, afterimage:'morty', m:{x:50,y:16,frame:1}},
-    {t:920, m:{x:36,y:22,frame:2,rot:-16}, sparking:'morty', impact:1, rp:14, r:{x:24,y:8,rot:-10,frame:0}},
-    {t:1200, callout:'DANCING BLADE', r:{x:34,y:0,frame:2}},
-    {t:1360, impact:1, trail:{color:'red',x:48,y:12,rot:-16}, mp:22, m:{x:70,y:6,frame:0}},
-    {t:1560, impact:1, trail:{color:'green',x:54,y:14,rot:6}, mp:34, m:{x:78,y:8,frame:0}, r:{x:40,y:0,frame:2}},
-    {t:1860, callout:'QUICK ATTACK', qa:{x:36,y:10,w:26,rot:10}, afterimage:'morty', m:{x:58,y:4,frame:1}, impact:1, rp:28, r:{x:22,y:6,rot:-8,frame:0}},
-    {t:2200, r:{x:28,y:0,frame:0}, m:{x:70,y:0,frame:0}},
-    {t:2500, callout:'FORWARD SMASH', r:{x:30,y:0,frame:1}},
-    {t:2700, callout:'THUNDER', cloud:{x:30,show:1}, m:{x:68,y:0,frame:4}, r:{x:32,y:0,frame:1}},
-    {t:3100, impact:1, trail:{color:'white',x:50,y:16,rot:-20}, tipper:{x:54,y:16}, bolt:{x:30,show:1}, rp:74, mp:72, r:{x:22,y:16,rot:-20,frame:2}, m:{x:82,y:16,rot:20,frame:1}, cloud:{show:0}},
-    {t:3450, bolt:{show:0}, r:{x:4,y:44,rot:-80,frame:0}, m:{x:110,y:44,rot:80,frame:1}, rp:74, mp:72},
-    {t:3900, r:{x:-28,y:60,rot:-120,frame:0,scale:.75}, m:{x:165,y:60,rot:120,frame:2,scale:.75}, blast:'both', ko:'both'},
-    {t:4400, banner:1}
+    {t:280, r:{x:38,y:0,frame:2}, impact:1, trail:{color:'blue',x:52,y:12,rot:-12}, mp:11, m:{x:80,y:4,rot:8,frame:0}},
+    {t:640, callout:'QUICK ATTACK', qa:{x:78,y:14,w:22,rot:190}, afterimage:'morty', m:{x:50,y:16,frame:1}},
+    {t:860, m:{x:36,y:22,frame:2,rot:-16}, sparking:'morty', impact:1, rp:14, r:{x:24,y:8,rot:-10,frame:0}},
+    {t:1140, callout:'DANCING BLADE', r:{x:34,y:0,frame:2}},
+    {t:1300, impact:1, trail:{color:'red',x:48,y:12,rot:-16}, mp:22, m:{x:70,y:6,frame:0}},
+    {t:1500, impact:1, trail:{color:'green',x:54,y:14,rot:6}, mp:34, m:{x:78,y:8,frame:0}, r:{x:40,y:0,frame:2}},
+    {t:1800, callout:'QUICK ATTACK', qa:{x:36,y:10,w:26,rot:10}, afterimage:'morty', m:{x:56,y:4,frame:1}, impact:1, rp:28, r:{x:22,y:6,rot:-8,frame:0}},
+    {t:2100, callout:'THUNDER JOLT', m:{x:62,y:0,frame:3}, jolt:{x:56,y:16,show:1}},
+    {t:2280, jolt:{x:40,y:6,show:1}, impact:1, rp:42, r:{x:26,y:4,rot:8,frame:0}},
+    {t:2360, jolt:{show:0}, r:{x:28,y:0,frame:0}, m:{x:70,y:0,frame:0}},
+    {t:2600, callout:'THUNDER', cloud:{x:30,show:1}, m:{x:72,y:0,frame:4}},
+    {t:2880, callout:'COUNTER', counter:'roman', r:{x:32,y:0,frame:1}},
+    {t:3180, bolt:{x:32,show:1}, counter:'roman', r:{x:32,y:0,frame:1}, m:{x:72,y:0,frame:4}, cloud:{show:0}},
+    {t:3320, bolt:{show:0}, callout:'COUNTER', impact:1, trail:{color:'white',x:58,y:16,rot:-8}, tipper:{x:68,y:18}, mp:76, m:{x:90,y:20,rot:24,frame:1}, r:{x:48,y:2,frame:2}},
+    {t:3680, m:{x:108,y:36,rot:70,frame:2,scale:.95}, r:{x:50,y:0,frame:3}},
+    {t:4050, m:{x:100,y:36,rot:80,frame:2,scale:.9}, blast:'right', ko:'morty', r:{x:48,y:0,frame:3}},
+    {t:4500, banner:1, blast:'right', ko:'morty', m:{x:102,y:38,rot:90,frame:2,scale:.85}}
    ]
   },
   {
-   id:'edgeguard', banner:'ROMAN WINS!', sub:'DOLPHIN SLASH', winner:'roman',
+   id:'edgeguard', banner:'ROMAN WINS!', winner:'roman',
    keys:[
     {t:0, r:{x:28,y:0,rot:0,frame:0}, m:{x:72,y:0,rot:0,frame:0}, rp:0, mp:0},
     {t:280, r:{x:24,y:0,frame:0}},
@@ -701,7 +703,7 @@ const FIGHT = __FIGHT__;
    ]
   },
   {
-   id:'jolt-aerial', banner:'MORTY WINS!', sub:'THUNDER JOLT  \u2192  FORWARD AIR', winner:'morty',
+   id:'jolt-aerial', banner:'MORTY WINS!', winner:'morty',
    keys:[
     {t:0, r:{x:28,y:0,rot:0,frame:0}, m:{x:74,y:0,rot:0,frame:0}, rp:0, mp:0},
     {t:220, callout:'QUICK ATTACK', qa:{x:70,y:14,w:28,rot:200}, afterimage:'morty', m:{x:50,y:16,frame:1}},
@@ -805,11 +807,10 @@ const FIGHT = __FIGHT__;
  }
  function resetFx(){
   [callout,bolt,jolt,cloud,trail,arc,spark,qa,blast,romanKo,mortyKo,banner,sub].forEach(function(el){ showFx(el,false); });
-  romanEl.classList.remove('sparking');
-  mortyEl.classList.remove('sparking');
+  romanEl.classList.remove('sparking','countering');
+  mortyEl.classList.remove('sparking','countering');
   stage.classList.remove('shake','flash');
   clearGhosts();
-  banner.classList.remove('draw');
   trail.className='blade-trail';
   lastRp=-1; lastMp=-1;
   rPct.dataset.v='0'; mPct.dataset.v='0';
@@ -842,9 +843,7 @@ const FIGHT = __FIGHT__;
   setPct(rPct, rp);
   setPct(mPct, mp);
 
-  const co=lastKey(keys,'callout',now);
-  if(co && now-co.t<800){ callout.textContent=co.callout; showFx(callout,true); }
-  else showFx(callout,false);
+  showFx(callout,false);
 
   const tr=lastKey(keys,'trail',now);
   if(tr && tr.trail && now-tr.t<320){
@@ -886,6 +885,9 @@ const FIGHT = __FIGHT__;
   const sp=lastKey(keys,'sparking',now);
   romanEl.classList.toggle('sparking', !!(sp && sp.sparking==='roman' && now-sp.t<500));
   mortyEl.classList.toggle('sparking', !!(sp && sp.sparking==='morty' && now-sp.t<500));
+  const cn=lastKey(keys,'counter',now);
+  romanEl.classList.toggle('countering', !!(cn && cn.counter==='roman' && now-cn.t<900));
+  mortyEl.classList.toggle('countering', !!(cn && cn.counter==='morty' && now-cn.t<900));
 
   const ko=lastKey(keys,'ko',now);
   showFx(romanKo, !!(ko && (ko.ko==='roman'||ko.ko==='both')));
@@ -922,10 +924,8 @@ const FIGHT = __FIGHT__;
 
   if(lastKey(keys,'banner',now)){
    banner.textContent=outcome.banner;
-   banner.classList.toggle('draw', outcome.winner==='draw');
    showFx(banner,true);
-   sub.textContent=outcome.sub||'';
-   showFx(sub,true);
+   showFx(sub,false);
   } else {
    showFx(banner,false);
    showFx(sub,false);
@@ -960,10 +960,8 @@ const FIGHT = __FIGHT__;
   if(reduce){
    applyAt(current, last, false);
    banner.textContent=current.banner;
-   banner.classList.toggle('draw', current.winner==='draw');
    showFx(banner,true);
-   sub.textContent=current.sub||'';
-   showFx(sub,true);
+   showFx(sub,false);
    return;
   }
   if(paused && seek!=null){
