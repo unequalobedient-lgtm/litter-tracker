@@ -31,32 +31,47 @@ def load_log():
 
 
 def make_chart(pts, color):
-    w, h, pad = 420, 150, 24
+    # pts: list of (datetime, weight_lb)
+    w, h = 440, 170
+    padl, padr, padt, padb = 30, 14, 14, 26
     xs = [p[0].timestamp() for p in pts]
     ys = [p[1] for p in pts]
     xmin, xmax = min(xs), max(xs)
     ymin, ymax = min(ys) - 0.3, max(ys) + 0.3
 
     def X(x):
-        return pad + (x - xmin) / (xmax - xmin or 1) * (w - 2 * pad)
+        return padl + (x - xmin) / (xmax - xmin or 1) * (w - padl - padr)
 
     def Y(y):
-        return h - pad - (y - ymin) / (ymax - ymin or 1) * (h - 2 * pad)
+        return h - padb - (y - ymin) / (ymax - ymin or 1) * (h - padt - padb)
 
     pline = " ".join(f"{X(x):.1f},{Y(y):.1f}" for x, y in zip(xs, ys))
-    dots = "".join(
-        f'<circle cx="{X(x):.1f}" cy="{Y(y):.1f}" r="2.5" fill="{color}"/>'
-        for x, y in zip(xs, ys)
-    )
+    dots = []
+    for (dt, y), x in zip(pts, xs):
+        cx, cy = X(x), Y(y)
+        label = dt.strftime("%b %-d, %-I:%M %p") + f"  \u2022  {y:.2f} lb"
+        dots.append(f'<circle cx="{cx:.1f}" cy="{cy:.1f}" r="2.6" fill="{color}"/>')
+        dots.append(
+            f'<circle class="hit" cx="{cx:.1f}" cy="{cy:.1f}" r="11" fill="transparent" '
+            f'data-label="{label}" data-cx="{cx:.1f}" data-cy="{cy:.1f}"/>'
+        )
+    dots = "".join(dots)
+
+    first = pts[0][0].strftime("%b %-d")
+    last = pts[-1][0].strftime("%b %-d")
     return (
-        f'<svg viewBox="0 0 {w} {h}" class="chart">'
+        f'<svg viewBox="0 0 {w} {h}" class="chart" preserveAspectRatio="xMidYMid meet">'
         f'<polyline points="{pline}" fill="none" stroke="{color}" stroke-width="2"/>'
         f'{dots}'
-        f'<text x="{pad}" y="12" class="axl">{ymax:.1f} lb</text>'
-        f'<text x="{pad}" y="{h-6}" class="axl">{ymin:.1f} lb</text>'
+        f'<text x="{padl}" y="12" class="axl">{ymax:.1f} lb</text>'
+        f'<text x="{padl}" y="{h-padb+14}" class="axl">{first}</text>'
+        f'<text x="{w-padr}" y="{h-padb+14}" class="axl" text-anchor="end">{last}</text>'
+        f'<g class="tip" style="display:none">'
+        f'<rect class="tipbg" rx="4" x="0" y="0" width="10" height="10"/>'
+        f'<text class="tiptx" x="0" y="0"></text>'
+        f'</g>'
         f'</svg>'
     )
-
 
 def main():
     if not VISITS.is_file():
@@ -111,6 +126,7 @@ def main():
             '</div>'
             f'{flag}'
             f'<div class="chartbox">{chart}</div>'
+            '<div class="hinttxt">Tap any point for its exact time</div>'
             f'<div class="last">Last seen {last_seen}</div>'
             '</div>'
         )
@@ -137,7 +153,12 @@ PAGE = """<!doctype html><html><head><meta charset="utf-8">
  .meta{color:#8b96a5;font-size:13px;margin-bottom:20px}
  .card{background:#1b212b;border:1px solid #2a3240;border-radius:16px;padding:18px;margin-bottom:18px}
  .head{display:flex;align-items:center;gap:14px;margin-bottom:14px}
- .sprite{width:64px;height:64px;image-rendering:pixelated;background:#0d0f13;border-radius:12px;padding:4px}
+ .sprite{width:64px;height:64px;image-rendering:pixelated;background:#0d0f13;border-radius:12px;padding:4px;transform-origin:50% 90%}
+ .card:nth-of-type(odd) .sprite{animation:bobA 2.6s ease-in-out infinite}
+ .card:nth-of-type(even) .sprite{animation:bobB 3.1s ease-in-out infinite}
+ @keyframes bobA{0%,100%{transform:translateY(0) rotate(-2deg)}50%{transform:translateY(-5px) rotate(2deg)}}
+ @keyframes bobB{0%,100%{transform:translateY(0) rotate(2deg)}50%{transform:translateY(-4px) rotate(-3deg)}}
+ @media (prefers-reduced-motion:reduce){.sprite{animation:none!important}}
  .name{font-size:20px;font-weight:700}
  .sub{color:#8b96a5;font-size:13px}
  .stats{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:12px}
@@ -148,16 +169,49 @@ PAGE = """<!doctype html><html><head><meta charset="utf-8">
  .flag.up{background:#3a2a16;color:#f0b36b}
  .flag.down{background:#16263a;color:#6bb3f0}
  .chartbox{background:#131821;border-radius:10px;padding:8px}
- .chart{width:100%;height:auto}
+ .chart{width:100%;height:auto;touch-action:manipulation}
+ .hit{cursor:pointer}
  .axl{fill:#6b7684;font-size:9px}
+ .tipbg{fill:#0b0d11;stroke:#3a4452;stroke-width:1}
+ .tiptx{fill:#e8ecf1;font-size:10px;font-weight:600}
  .nochart{color:#6b7684;font-size:13px;text-align:center;padding:30px}
  .last{color:#8b96a5;font-size:12px;margin-top:10px}
+ .hinttxt{color:#6b7684;font-size:11px;margin-top:6px}
 </style></head><body><div class="wrap">
  <h1>&#128062; Litter Box Tracker</h1>
  <div class="meta">Updated __UPDATED__ &middot; __NEW__ new visits this run &middot; __TOTAL__ logged</div>
  __CARDS__
  <div class="meta">Weights read from the box scale, sorted to the nearest cat. The box can't tell them apart on its own, so an occasional visit may land on the wrong cat.</div>
-</div></body></html>"""
+</div>
+<script>
+(function(){
+ function hideAll(){document.querySelectorAll('svg .tip').forEach(function(t){t.style.display='none';});}
+ function show(hit){
+  var svg=hit.ownerSVGElement;var tip=svg.querySelector('.tip');
+  var tx=tip.querySelector('.tiptx');var bg=tip.querySelector('.tipbg');
+  hideAll();
+  tx.textContent=hit.getAttribute('data-label');
+  var cx=parseFloat(hit.getAttribute('data-cx'));var cy=parseFloat(hit.getAttribute('data-cy'));
+  var box=tx.getBBox===undefined?null:null;
+  tip.style.display='';
+  // measure after display
+  var b=tx.getBBox();var padx=6,pady=4;
+  var wbox=b.width+padx*2, hbox=b.height+pady*2;
+  var x=cx-wbox/2; var vb=svg.viewBox.baseVal;
+  if(x<2)x=2; if(x+wbox>vb.width-2)x=vb.width-2-wbox;
+  var y=cy-hbox-8; if(y<2)y=cy+10;
+  bg.setAttribute('x',x);bg.setAttribute('y',y);
+  bg.setAttribute('width',wbox);bg.setAttribute('height',hbox);
+  tx.setAttribute('x',x+padx);tx.setAttribute('y',y+pady+b.height*0.8);
+ }
+ document.querySelectorAll('svg .hit').forEach(function(h){
+  h.addEventListener('click',function(e){e.stopPropagation();show(h);});
+  h.addEventListener('mouseenter',function(){show(h);});
+ });
+ document.addEventListener('click',hideAll);
+})();
+</script>
+</body></html>"""
 
 
 if __name__ == "__main__":
