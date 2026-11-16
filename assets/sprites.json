@@ -21,12 +21,22 @@
   },
   "roman_fight": {
     "file": "roman_fight.png",
-    "sprite_w": 130,
-    "sprite_h": 124,
+    "sprite_w": 134,
+    "sprite_h": 126,
     "frames": 4,
-    "anchor_x": 0.42,
-    "anchor_y": 0.9919,
+    "anchor_x": 0.3209,
+    "anchor_y": 0.9603,
     "colors": 23,
-    "bytes": 18105
+    "bytes": 18299
+  },
+  "morty_fight": {
+    "file": "morty_fight.png",
+    "sprite_w": 105,
+    "sprite_h": 102,
+    "frames": 5,
+    "anchor_x": 0.5429,
+    "anchor_y": 0.9216,
+    "colors": 23,
+    "bytes": 23607
   }
 }

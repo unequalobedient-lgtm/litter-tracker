@@ -140,31 +140,21 @@ def waste_card_html() -> str:
 
 
 def fight_payload(meta: dict) -> dict:
-    ri, mi, rf = meta["roman_idle"], meta["morty_idle"], meta["roman_fight"]
+    rf, mf = meta["roman_fight"], meta["morty_fight"]
+    def pack(info, display=1):
+        return {
+            "sheet": b64(ASSETS / info["file"]),
+            "sprite_w": info["sprite_w"],
+            "sprite_h": info["sprite_h"],
+            "frames": info["frames"],
+            "anchor_x": info["anchor_x"],
+            "anchor_y": info["anchor_y"],
+            "display": display,
+        }
     return {
         "stage": b64(ASSETS / "omega_stage.jpg"),
-        "roman": {
-            "sheet": b64(ASSETS / rf["file"]),
-            "sprite_w": rf["sprite_w"],
-            "sprite_h": rf["sprite_h"],
-            "frames": rf["frames"],
-            "anchor_x": rf["anchor_x"],
-            "anchor_y": rf["anchor_y"],
-            "display": 1,
-        },
-        "morty": {
-            "sheet": b64(ASSETS / mi["file"]),
-            "sprite_w": mi["sprite_w"],
-            "sprite_h": mi["sprite_h"],
-            "frames": mi["frames"],
-            "anchor_x": mi["anchor_x"],
-            "anchor_y": mi["anchor_y"],
-            "display": 2,
-        },
-        "idle": {
-            "roman": b64(ASSETS / ri["file"]),
-            "morty": b64(ASSETS / mi["file"]),
-        },
+        "roman": pack(rf, 1),
+        "morty": pack(mf, 1),
     }
 
 
@@ -326,8 +316,8 @@ PAGE = r"""
  .fight-stage.flash .fight-flash{animation:fightflash .28s}
  @keyframes fightshake{0%,100%{transform:translate(0,0)}20%{transform:translate(-7px,3px)}40%{transform:translate(7px,-4px)}60%{transform:translate(-5px,-2px)}80%{transform:translate(5px,3px)}}
  @keyframes fightflash{0%{opacity:.85}100%{opacity:0}}
- .smash-hud{position:absolute;top:8px;left:8px;right:8px;display:flex;justify-content:space-between;gap:8px;pointer-events:none;z-index:8}
- .p-hud{background:rgba(8,6,18,.78);border:2px solid #e8e8f0;border-radius:8px;padding:4px 10px 3px;min-width:104px;box-shadow:0 2px 0 #000}
+ .smash-hud{position:absolute;bottom:6px;left:8px;right:8px;display:flex;justify-content:space-between;gap:8px;pointer-events:none;z-index:8}
+ .p-hud{background:rgba(8,6,18,.82);border:2px solid #e8e8f0;border-radius:8px;padding:3px 10px 2px;min-width:100px;box-shadow:0 2px 0 #000}
  .p-hud.p1{border-color:#7ec8ff}
  .p-hud.p2{border-color:#ffd36b;text-align:right}
  .p-tag{font-size:9px;letter-spacing:.14em;color:#9aa;font-weight:800}
@@ -336,25 +326,44 @@ PAGE = r"""
  .p-pct.mid{color:#ffe566}
  .p-pct.high{color:#ff9a3c}
  .p-pct.ko{color:#ff3b3b}
- .move-callout{position:absolute;top:38%;left:50%;transform:translate(-50%,0);text-align:center;font-weight:900;letter-spacing:.16em;font-size:14px;color:#fff;text-shadow:0 0 10px #7af,2px 2px 0 #000;z-index:6;pointer-events:none;opacity:0;background:rgba(0,0,0,.45);border-radius:8px;padding:4px 12px;white-space:nowrap}
+ .p-pct.pop{animation:pctpop .18s ease-out}
+ @keyframes pctpop{from{transform:scale(1.35)}to{transform:scale(1)}}
+ .move-callout{position:absolute;top:16%;left:50%;transform:translate(-50%,0);text-align:center;font-weight:900;letter-spacing:.16em;font-size:13px;color:#fff;text-shadow:0 0 10px #7af,2px 2px 0 #000;z-index:6;pointer-events:none;opacity:0;background:rgba(0,0,0,.5);border-radius:8px;padding:4px 12px;white-space:nowrap}
  .move-callout.show{opacity:1;animation:calloutpopx .3s ease-out}
- @keyframes calloutpop{from{transform:translate(-50%,0) scale(.6);opacity:0}to{transform:translate(-50%,0) scale(1);opacity:1}}
+ @keyframes calloutpop{from{transform:scale(.6);opacity:0}to{transform:scale(1);opacity:1}}
+ @keyframes calloutpopx{from{transform:translate(-50%,0) scale(.6);opacity:0}to{transform:translate(-50%,0) scale(1);opacity:1}}
  .fighter{position:absolute;width:0;height:0;z-index:3;pointer-events:none}
  .fighter-art{position:absolute;left:0;bottom:0;background-repeat:no-repeat;image-rendering:pixelated;image-rendering:crisp-edges;transform-origin:var(--ax) var(--ay)}
- .fighter.charging .fighter-art{filter:drop-shadow(0 0 6px #ffe56a) drop-shadow(0 0 14px #39f)}
- .fighter.countering .fighter-art{filter:drop-shadow(0 0 8px #cde) drop-shadow(0 0 14px #8bf)}
- .fighter.ghost .fighter-art{opacity:.35}
- .ko-mark{position:absolute;z-index:6;font-weight:900;letter-spacing:.12em;color:#ff4a4a;font-size:18px;text-shadow:2px 2px 0 #000;opacity:0;pointer-events:none}
+ .fighter.sparking .fighter-art{filter:drop-shadow(0 0 6px #ffe56a) drop-shadow(0 0 12px #39f)}
+ .fighter.ghost{opacity:.4;z-index:2}
+ .ko-mark{position:absolute;z-index:6;font-weight:900;letter-spacing:.14em;color:#ff4a4a;font-size:18px;text-shadow:2px 2px 0 #000;opacity:0;pointer-events:none}
  .ko-mark.show{opacity:1;animation:calloutpop .3s ease-out}
- .fx-bolt{position:absolute;width:18px;top:0;height:0;left:50%;margin-left:-9px;background:linear-gradient(#fff,#ffe56a,#fff);box-shadow:0 0 16px 6px #ffe56a,0 0 40px 10px #39f;clip-path:polygon(50% 0,78% 28%,58% 28%,85% 100%,28% 48%,48% 48%,20% 0);opacity:0;z-index:4;pointer-events:none}
- .fx-bolt.show{opacity:1;height:72%}
- .fx-jolt{position:absolute;width:16px;height:16px;border-radius:50%;background:radial-gradient(circle at 35% 35%,#fff,#ffe56a 40%,#39f 70%,transparent 75%);box-shadow:0 0 10px 4px #ffe56a;opacity:0;z-index:4;pointer-events:none;margin-left:-8px;margin-bottom:-8px}
+ .blade-trail{position:absolute;width:90px;height:16px;border-radius:6px 40px 40px 6px;opacity:0;z-index:4;pointer-events:none;transform-origin:10% 50%;filter:blur(.3px)}
+ .blade-trail.red{background:linear-gradient(90deg,transparent,#ff3a3a 25%,#ffd0d0);box-shadow:0 0 12px #f33}
+ .blade-trail.green{background:linear-gradient(90deg,transparent,#3dff6b 25%,#d0ffd8);box-shadow:0 0 12px #3d6}
+ .blade-trail.blue{background:linear-gradient(90deg,transparent,#3da9ff 25%,#d0e8ff);box-shadow:0 0 12px #3af}
+ .blade-trail.white{background:linear-gradient(90deg,transparent,#fff 20%,#ffe56a);box-shadow:0 0 16px #fff,0 0 28px #ffe56a}
+ .blade-trail.show{opacity:1;animation:trailfade .32s ease-out forwards}
+ @keyframes trailfade{0%{opacity:1;transform:scaleX(.6)}100%{opacity:0;transform:scaleX(1.15)}}
+ .dolphin-arc{position:absolute;width:70px;height:90px;border:3px solid transparent;border-left-color:#7cf;border-top-color:#cfefff;border-radius:50%;opacity:0;z-index:4;pointer-events:none;filter:drop-shadow(0 0 8px #4af);transform-origin:50% 100%}
+ .dolphin-arc.show{opacity:1;animation:dolphinarce .45s ease-out forwards}
+ @keyframes dolphinarce{0%{opacity:1;transform:rotate(-20deg) scale(.7)}100%{opacity:0;transform:rotate(20deg) scale(1.15)}}
+ .tipper-spark{position:absolute;width:52px;height:52px;margin-left:-26px;margin-bottom:-26px;background:radial-gradient(circle,#fff 0 18%,#ffe56a 38%,transparent 70%);box-shadow:0 0 18px 8px #fff,0 0 36px 12px #ffe56a;opacity:0;z-index:5;pointer-events:none}
+ .tipper-spark.show{opacity:1;animation:sparkpop .4s ease-out forwards}
+ @keyframes sparkpop{0%{transform:scale(.3);opacity:1}100%{transform:scale(1.8);opacity:0}}
+ .qa-streak{position:absolute;height:4px;border-radius:4px;background:linear-gradient(90deg,transparent,#fff,#ffe56a,#fff,transparent);box-shadow:0 0 8px #ffe56a;opacity:0;z-index:4;pointer-events:none;transform-origin:0 50%}
+ .qa-streak.show{opacity:.95;animation:qafade .28s ease-out forwards}
+ @keyframes qafade{0%{opacity:.95}100%{opacity:0}}
+ .fx-bolt{position:absolute;width:28px;top:0;height:0;margin-left:-14px;opacity:0;z-index:4;pointer-events:none;filter:drop-shadow(0 0 8px #fff) drop-shadow(0 0 18px #4af) drop-shadow(0 0 28px #ffe56a)}
+ .fx-bolt.show{opacity:1;height:70%}
+ .bolt-core{width:100%;height:100%;background:linear-gradient(#fff 0%,#cfe9ff 25%,#7cf 55%,#ffe56a 100%);clip-path:polygon(48% 0,72% 16%,56% 16%,88% 46%,60% 46%,78% 100%,28% 52%,50% 52%,22% 24%,44% 24%)}
+ .fx-jolt{position:absolute;width:18px;height:18px;border-radius:50%;background:radial-gradient(circle at 35% 35%,#fff,#ffe56a 40%,#39f 70%,transparent 75%);box-shadow:0 0 12px 5px #ffe56a;opacity:0;z-index:4;pointer-events:none;margin-left:-9px;margin-bottom:-9px}
  .fx-jolt.show{opacity:1}
- .fx-slash{position:absolute;width:72px;height:72px;border:4px solid transparent;border-top-color:#fff;border-right-color:#cdefff;border-radius:50%;opacity:0;z-index:4;pointer-events:none;filter:drop-shadow(0 0 6px #fff);margin-left:-36px;margin-bottom:-36px}
- .fx-slash.show{opacity:1;animation:slashpop .35s ease-out}
- @keyframes slashpop{from{transform:scale(.4) rotate(-20deg);opacity:1}to{transform:scale(1.3) rotate(25deg);opacity:0}}
- .fx-cloud{position:absolute;top:16%;width:54px;height:22px;margin-left:-27px;border-radius:20px;background:#e8eef8;box-shadow:18px 4px 0 #cfd8e8,-16px 6px 0 #dfe6f2,0 0 16px #fff;opacity:0;z-index:4;pointer-events:none}
+ .fx-cloud{position:absolute;top:4%;width:58px;height:20px;margin-left:-29px;border-radius:20px;background:#e8eef8;box-shadow:16px 4px 0 #cfd8e8,-14px 5px 0 #dfe6f2,0 0 16px #fff;opacity:0;z-index:4;pointer-events:none}
  .fx-cloud.show{opacity:.92}
+ .blast{position:absolute;width:90px;height:90px;margin-left:-45px;margin-top:-45px;border-radius:50%;background:radial-gradient(circle,#fff 0 8%,#ffe56a 18%,#ff6a3a 40%,transparent 70%);opacity:0;z-index:6;pointer-events:none}
+ .blast.show{animation:blastpop .5s ease-out forwards}
+ @keyframes blastpop{0%{transform:scale(.4);opacity:1}100%{transform:scale(1.6);opacity:0}}
  .fight-banner{display:none;text-align:center;margin:10px 0 4px;font-size:26px;font-weight:900;letter-spacing:.08em;color:#ffe56a;text-shadow:3px 3px 0 #6b1d1d,0 0 12px rgba(255,229,106,.4);animation:bannerpop .35s ease-out}
  .fight-banner.show{display:block}
  .fight-banner.draw{color:#e8ecf1;text-shadow:3px 3px 0 #2a3240,0 0 12px rgba(200,210,255,.4)}
@@ -363,7 +372,7 @@ PAGE = r"""
  @keyframes bannerpop{from{transform:scale(.6);opacity:0}to{transform:scale(1);opacity:1}}
  .fight-replay{display:block;margin:12px auto 0;padding:10px 18px;border-radius:999px;border:1px solid #e8c56b;background:#2a3240;color:#ffe9a3;font-weight:700;font-size:14px;cursor:pointer}
  @media (prefers-reduced-motion:reduce){
-   .fight-stage.shake,.fight-stage.flash .fight-flash,.fight-banner,.move-callout,.ko-mark,.fx-slash{animation:none!important}
+   .fight-stage.shake,.fight-stage.flash .fight-flash,.fight-banner,.move-callout,.ko-mark,.blade-trail,.tipper-spark,.dolphin-arc,.qa-streak,.blast,.p-pct.pop{animation:none!important}
    .sprite{animation:none!important}
  }
  @keyframes idle{from{background-position:0 0}to{background-position:calc(-1 * var(--sheet-w)) 0}}
@@ -411,20 +420,24 @@ PAGE = r"""
  <div class="fight-modal" role="dialog" aria-modal="true" aria-label="Fight">
   <div class="fight-toolbar"><button type="button" class="fight-close" aria-label="Close">&times;</button></div>
   <div class="fight-stage">
-   <div class="smash-hud">
-    <div class="p-hud p1"><div class="p-tag">P1</div><div class="p-name">ROMAN</div><div class="p-pct" id="roman-pct">0%</div></div>
-    <div class="p-hud p2"><div class="p-tag">P2</div><div class="p-name">MORTY</div><div class="p-pct" id="morty-pct">0%</div></div>
-   </div>
    <div class="fighter roman"><div class="fighter-art"></div></div>
    <div class="fighter morty"><div class="fighter-art"></div></div>
+   <div class="blade-trail"></div>
+   <div class="dolphin-arc"></div>
+   <div class="tipper-spark"></div>
+   <div class="qa-streak"></div>
    <div class="fx-cloud"></div>
-   <div class="fx-bolt"></div>
+   <div class="fx-bolt"><div class="bolt-core"></div></div>
    <div class="fx-jolt"></div>
-   <div class="fx-slash"></div>
+   <div class="blast"></div>
    <div class="fight-flash"></div>
    <div class="move-callout"></div>
    <div class="ko-mark roman-ko">KO</div>
    <div class="ko-mark morty-ko">KO</div>
+   <div class="smash-hud">
+    <div class="p-hud p1"><div class="p-tag">P1</div><div class="p-name">ROMAN</div><div class="p-pct" id="roman-pct">0%</div></div>
+    <div class="p-hud p2"><div class="p-tag">P2</div><div class="p-name">MORTY</div><div class="p-pct" id="morty-pct">0%</div></div>
+   </div>
   </div>
   <div class="fight-banner">ROMAN WINS!</div>
   <div class="fight-sub"></div>
@@ -568,11 +581,14 @@ const FIGHT = __FIGHT__;
  const banner=overlay.querySelector('.fight-banner');
  const sub=overlay.querySelector('.fight-sub');
  const callout=overlay.querySelector('.move-callout');
- const flashEl=overlay.querySelector('.fight-flash');
  const bolt=overlay.querySelector('.fx-bolt');
  const jolt=overlay.querySelector('.fx-jolt');
- const slash=overlay.querySelector('.fx-slash');
  const cloud=overlay.querySelector('.fx-cloud');
+ const trail=overlay.querySelector('.blade-trail');
+ const arc=overlay.querySelector('.dolphin-arc');
+ const spark=overlay.querySelector('.tipper-spark');
+ const qa=overlay.querySelector('.qa-streak');
+ const blast=overlay.querySelector('.blast');
  const romanEl=overlay.querySelector('.fighter.roman');
  const mortyEl=overlay.querySelector('.fighter.morty');
  const romanArt=romanEl.querySelector('.fighter-art');
@@ -598,92 +614,116 @@ const FIGHT = __FIGHT__;
   art.style.setProperty('--ay', (ay*100)+'%');
   art.style.marginLeft=(-(ax*w))+'px';
   art.style.marginBottom=(-((1-ay)*h))+'px';
-  art.dataset.face=String(face);
   art.dataset.w=String(w);
-  art.dataset.frames=String(meta.frames);
+  art.dataset.face=String(face);
  }
 
  prepFighter(romanEl, romanArt, FIGHT.roman, 1);
  prepFighter(mortyEl, mortyArt, FIGHT.morty, -1);
 
+ /* Frame maps:
+    Roman: 0 ready, 1 sword-up, 2 slash/thrust, 3 victory/high
+    Morty: 0 crouch/ready, 1 lunge, 2 buzzsaw, 3 jolt throw, 4 victory/spark */
  const OUTCOMES=[
   {
-   id:'dolphin-slash', banner:'ROMAN WINS!', sub:'DOLPHIN SLASH', winner:'roman',
+   id:'dancing-blade', banner:'ROMAN WINS!', sub:'TIPPERED DANCING BLADE', winner:'roman',
    keys:[
     {t:0, r:{x:26,y:0,rot:0,frame:0}, m:{x:74,y:0,rot:0,frame:0}, rp:0, mp:0},
-    {t:180, callout:'DOLPHIN SLASH', r:{x:26,y:-4,rot:-16,frame:0}},
-    {t:420, r:{x:40,y:28,rot:-42,frame:1}},
-    {t:680, r:{x:56,y:48,rot:-8,frame:3}},
-    {t:720, impact:1, slash:{x:66,y:36}, mp:52, m:{x:80,y:28,rot:24,frame:2}},
-    {t:980, mp:104, m:{x:86,y:62,rot:90,frame:4}, r:{x:52,y:20,rot:0,frame:3}},
-    {t:1500, mp:124, m:{x:88,y:18,rot:140,frame:5}},
-    {t:2000, r:{x:48,y:0,rot:0,frame:3}, m:{x:84,y:-4,rot:95,frame:6}, ko:'morty'},
-    {t:2500, banner:1}
+    {t:280, r:{x:38,y:0,frame:0}},
+    {t:520, r:{x:22,y:0,frame:0}},
+    {t:800, callout:'DANCING BLADE', r:{x:36,y:0,frame:2}},
+    {t:980, impact:1, trail:{color:'red',x:50,y:14,rot:-18}, mp:7, m:{x:78,y:2,rot:8,frame:0}, r:{x:42,y:0,frame:2}},
+    {t:1220, impact:1, trail:{color:'green',x:54,y:16,rot:8}, mp:16, m:{x:82,y:6,rot:12,frame:0}, r:{x:46,y:0,frame:2}},
+    {t:1480, impact:1, trail:{color:'blue',x:58,y:18,rot:-10}, mp:26, m:{x:86,y:10,rot:16,frame:0}, r:{x:50,y:2,frame:2}},
+    {t:1760, callout:'TIPPER', impact:1, trail:{color:'white',x:70,y:16,rot:-6}, tipper:{x:78,y:20}, mp:47, m:{x:86,y:16,rot:22,frame:1}, r:{x:54,y:2,frame:2}},
+    {t:2150, m:{x:108,y:32,rot:50,frame:1,scale:.95}, mp:47},
+    {t:2550, m:{x:96,y:32,rot:60,frame:2,scale:.95}, blast:'right', ko:'morty', r:{x:48,y:0,rot:0,frame:3}},
+    {t:3100, banner:1, blast:'right', ko:'morty', m:{x:100,y:36,rot:80,frame:2,scale:.9}}
    ]
   },
   {
-   id:'skull-bash', banner:'MORTY WINS!', sub:'SKULL BASH', winner:'morty',
+   id:'grab-thunder', banner:'MORTY WINS!', sub:'DOWN THROW  \u2192  THUNDER', winner:'morty',
    keys:[
-    {t:0, r:{x:26,y:0,rot:0,frame:0}, m:{x:74,y:0,rot:0,frame:0}, rp:0, mp:0},
-    {t:200, callout:'SKULL BASH', charge:'morty', m:{x:76,y:0,rot:8,frame:2,scale:1.05}},
-    {t:800, charge:'morty', m:{x:74,y:2,rot:0,frame:3,scale:1.12}},
-    {t:920, afterimage:'morty', m:{x:42,y:10,rot:-16,frame:1,scale:1.18}},
-    {t:1080, impact:1, slash:{x:32,y:16}, rp:48, r:{x:16,y:22,rot:-28,frame:0}, m:{x:34,y:6,rot:-8,frame:1,scale:1.1}},
-    {t:1280, rp:112, r:{x:8,y:54,rot:-80,frame:0}, m:{x:36,y:0,rot:0,frame:0,scale:1}},
-    {t:1800, rp:138, r:{x:8,y:16,rot:-120,frame:0}},
-    {t:2200, r:{x:10,y:-4,rot:-95,frame:0}, m:{x:40,y:0,rot:0,frame:0}, ko:'roman'},
-    {t:2600, banner:1}
+    {t:0, r:{x:28,y:0,rot:0,frame:0}, m:{x:76,y:0,rot:0,frame:0}, rp:0, mp:0},
+    {t:200, callout:'QUICK ATTACK', qa:{x:70,y:16,w:30,rot:200}, afterimage:'morty', m:{x:48,y:18,frame:1}},
+    {t:420, qa:{x:40,y:8,w:24,rot:-20}, afterimage:'morty', m:{x:38,y:0,frame:1}},
+    {t:640, callout:'GRAB', m:{x:34,y:0,frame:1}, r:{x:28,y:6,rot:-8,frame:0}},
+    {t:880, callout:'DOWN THROW', rp:9, r:{x:30,y:34,rot:10,frame:0}, m:{x:36,y:0,frame:0}, impact:1},
+    {t:1180, callout:'FORWARD AIR', m:{x:32,y:28,frame:2,rot:-20}, sparking:'morty'},
+    {t:1360, impact:1, rp:20, r:{x:26,y:40,rot:-16,frame:0}, m:{x:30,y:32,frame:2,rot:10}},
+    {t:1600, m:{x:28,y:36,frame:2,rot:-30}, sparking:'morty'},
+    {t:1760, impact:1, rp:34, r:{x:22,y:36,rot:-24,frame:0}},
+    {t:2000, m:{x:26,y:22,frame:2}, impact:1, rp:48, r:{x:18,y:20,rot:-20,frame:0}},
+    {t:2300, m:{x:58,y:0,frame:0}, r:{x:20,y:2,rot:-8,frame:0}},
+    {t:2580, callout:'THUNDER', cloud:{x:22,show:1}, m:{x:70,y:0,frame:4}},
+    {t:3000, bolt:{x:22,show:1}, impact:1, rp:78, r:{x:18,y:14,rot:-20,frame:0}, cloud:{show:0}, m:{x:72,y:0,frame:4}},
+    {t:3300, bolt:{show:0}, r:{x:4,y:36,rot:-70,frame:0,scale:.95}, rp:78, m:{x:74,y:0,frame:4}},
+    {t:3700, r:{x:-22,y:52,rot:-110,frame:0,scale:.75}, blast:'left', ko:'roman', m:{x:74,y:0,frame:4}},
+    {t:4200, banner:1}
    ]
   },
   {
-   id:'double-ko', banner:'DRAW!', sub:'SHIELD BREAKER  VS  THUNDER', winner:'draw',
+   id:'trade', banner:'DRAW!', sub:'FORWARD SMASH  VS  THUNDER', winner:'draw',
    keys:[
     {t:0, r:{x:26,y:0,rot:0,frame:0}, m:{x:74,y:0,rot:0,frame:0}, rp:0, mp:0},
-    {t:180, callout:'SHIELD BREAKER', r:{x:24,y:0,rot:8,frame:0}, counter:'roman'},
-    {t:420, callout:'THUNDER', cloud:{x:50,show:1}, m:{x:74,y:0,rot:0,frame:2}},
-    {t:900, r:{x:42,y:4,rot:0,frame:2}, bolt:{x:50,show:1}},
-    {t:1050, impact:1, slash:{x:50,y:20}, rp:78, mp:78, r:{x:38,y:24,rot:-20,frame:2}, m:{x:62,y:24,rot:20,frame:4}},
-    {t:1250, rp:148, mp:148, r:{x:12,y:56,rot:-70,frame:0}, m:{x:88,y:56,rot:70,frame:4}, bolt:{show:0}, cloud:{show:0}},
-    {t:1900, r:{x:10,y:14,rot:-110,frame:0}, m:{x:90,y:14,rot:110,frame:6}},
-    {t:2400, r:{x:12,y:-4,rot:-95,frame:0}, m:{x:88,y:-4,rot:95,frame:6}, ko:'both'},
-    {t:2800, banner:1}
+    {t:300, r:{x:40,y:0,frame:2}, impact:1, trail:{color:'blue',x:54,y:12,rot:-12}, mp:12, m:{x:80,y:4,rot:10,frame:0}},
+    {t:700, callout:'QUICK ATTACK', qa:{x:78,y:14,w:22,rot:190}, afterimage:'morty', m:{x:50,y:16,frame:1}},
+    {t:920, m:{x:36,y:22,frame:2,rot:-16}, sparking:'morty', impact:1, rp:14, r:{x:24,y:8,rot:-10,frame:0}},
+    {t:1200, callout:'DANCING BLADE', r:{x:34,y:0,frame:2}},
+    {t:1360, impact:1, trail:{color:'red',x:48,y:12,rot:-16}, mp:22, m:{x:70,y:6,frame:0}},
+    {t:1560, impact:1, trail:{color:'green',x:54,y:14,rot:6}, mp:34, m:{x:78,y:8,frame:0}, r:{x:40,y:0,frame:2}},
+    {t:1860, callout:'QUICK ATTACK', qa:{x:36,y:10,w:26,rot:10}, afterimage:'morty', m:{x:58,y:4,frame:1}, impact:1, rp:28, r:{x:22,y:6,rot:-8,frame:0}},
+    {t:2200, r:{x:28,y:0,frame:0}, m:{x:70,y:0,frame:0}},
+    {t:2500, callout:'FORWARD SMASH', r:{x:30,y:0,frame:1}},
+    {t:2700, callout:'THUNDER', cloud:{x:30,show:1}, m:{x:68,y:0,frame:4}, r:{x:32,y:0,frame:1}},
+    {t:3100, impact:1, trail:{color:'white',x:50,y:16,rot:-20}, tipper:{x:54,y:16}, bolt:{x:30,show:1}, rp:74, mp:72, r:{x:22,y:16,rot:-20,frame:2}, m:{x:82,y:16,rot:20,frame:1}, cloud:{show:0}},
+    {t:3450, bolt:{show:0}, r:{x:4,y:44,rot:-80,frame:0}, m:{x:110,y:44,rot:80,frame:1}, rp:74, mp:72},
+    {t:3900, r:{x:-28,y:60,rot:-120,frame:0,scale:.75}, m:{x:165,y:60,rot:120,frame:2,scale:.75}, blast:'both', ko:'both'},
+    {t:4400, banner:1}
    ]
   },
   {
-   id:'shield-breaker', banner:'ROMAN WINS!', sub:'SHIELD BREAKER', winner:'roman',
+   id:'edgeguard', banner:'ROMAN WINS!', sub:'DOLPHIN SLASH', winner:'roman',
    keys:[
-    {t:0, r:{x:26,y:0,rot:0,frame:0}, m:{x:74,y:0,rot:0,frame:0}, rp:0, mp:0},
-    {t:200, callout:'SHIELD BREAKER', counter:'roman', r:{x:24,y:0,rot:6,frame:0}},
-    {t:700, r:{x:44,y:4,rot:0,frame:2}},
-    {t:880, impact:1, slash:{x:66,y:16}, mp:38, m:{x:86,y:20,rot:16,frame:1}},
-    {t:1100, mp:92, m:{x:110,y:48,rot:28,frame:2}},
-    {t:1500, mp:128, m:{x:138,y:90,rot:80,frame:4,scale:0.85}},
-    {t:2000, r:{x:46,y:0,rot:0,frame:2}, m:{x:160,y:130,rot:120,frame:4,scale:0.55}, ko:'morty'},
-    {t:2300, banner:1}
+    {t:0, r:{x:28,y:0,rot:0,frame:0}, m:{x:72,y:0,rot:0,frame:0}, rp:0, mp:0},
+    {t:280, r:{x:24,y:0,frame:0}},
+    {t:520, r:{x:40,y:0,frame:2}, impact:1, trail:{color:'blue',x:56,y:12,rot:-10}, mp:11, m:{x:82,y:4,rot:8,frame:0}},
+    {t:900, r:{x:48,y:0,frame:2}, impact:1, trail:{color:'white',x:66,y:14,rot:-8}, tipper:{x:70,y:16}, mp:28, m:{x:96,y:16,rot:18,frame:1}},
+    {t:1280, m:{x:118,y:22,rot:30,frame:1}, mp:42, r:{x:52,y:0,frame:2}, impact:1, trail:{color:'red',x:70,y:12,rot:-6}},
+    {t:1650, m:{x:132,y:10,rot:20,frame:0,scale:.95}, r:{x:58,y:0,frame:0}},
+    {t:2000, callout:'QUICK ATTACK', qa:{x:128,y:20,w:28,rot:210}, afterimage:'morty', m:{x:108,y:28,frame:1,face:1}},
+    {t:2280, qa:{x:100,y:12,w:22,rot:-30}, afterimage:'morty', m:{x:90,y:8,frame:1,face:1}},
+    {t:2550, callout:'DOLPHIN SLASH', r:{x:70,y:8,frame:1}},
+    {t:2780, r:{x:82,y:32,frame:3,rot:-20}, dolphin:{x:86,y:20}, impact:1, mp:58, m:{x:92,y:-6,rot:80,frame:1}},
+    {t:3100, m:{x:94,y:-36,rot:110,frame:2,scale:.9}, r:{x:78,y:16,frame:3,rot:0}},
+    {t:3450, m:{x:96,y:-90,rot:150,frame:2,scale:.7}, blast:'bottom', ko:'morty', r:{x:70,y:0,frame:3}},
+    {t:4000, banner:1}
    ]
   },
   {
-   id:'thunder', banner:'MORTY WINS!', sub:'THUNDER', winner:'morty',
+   id:'jolt-aerial', banner:'MORTY WINS!', sub:'THUNDER JOLT  \u2192  FORWARD AIR', winner:'morty',
    keys:[
-    {t:0, r:{x:26,y:0,rot:0,frame:0}, m:{x:74,y:0,rot:0,frame:0}, rp:0, mp:0},
-    {t:160, callout:'THUNDER JOLT', jolt:{x:70,y:8,show:1}, m:{x:74,y:0,rot:0,frame:1}},
-    {t:360, jolt:{x:56,y:28,show:1}},
-    {t:520, jolt:{x:44,y:4,show:1}},
-    {t:680, jolt:{x:30,y:22,show:1}, impact:1, rp:16, r:{x:24,y:0,rot:10,frame:0}},
-    {t:740, jolt:{show:0}},
-    {t:860, callout:'QUICK ATTACK', afterimage:'morty', m:{x:50,y:40,frame:0}},
-    {t:1020, afterimage:'morty', m:{x:28,y:8,frame:1}, impact:1, rp:40, r:{x:20,y:8,rot:-12,frame:0}},
-    {t:1180, m:{x:62,y:0,frame:0}},
-    {t:1320, callout:'THUNDER', cloud:{x:28,show:1}, m:{x:64,y:0,frame:2}},
-    {t:1600, bolt:{x:28,show:1}, impact:1, rp:78, r:{x:22,y:16,rot:-20,frame:0}},
-    {t:1760, rp:158, r:{x:12,y:58,rot:-90,frame:0}, bolt:{show:0}, cloud:{show:0}},
-    {t:2300, r:{x:14,y:-4,rot:-100,frame:0}, m:{x:62,y:0,rot:0,frame:0}, ko:'roman'},
-    {t:2700, banner:1}
+    {t:0, r:{x:28,y:0,rot:0,frame:0}, m:{x:74,y:0,rot:0,frame:0}, rp:0, mp:0},
+    {t:220, callout:'QUICK ATTACK', qa:{x:70,y:14,w:28,rot:200}, afterimage:'morty', m:{x:50,y:16,frame:1}},
+    {t:480, m:{x:56,y:0,frame:3}, callout:'THUNDER JOLT', jolt:{x:52,y:18,show:1}},
+    {t:700, jolt:{x:42,y:4,show:1}},
+    {t:900, jolt:{x:32,y:16,show:1}, impact:1, rp:8, r:{x:24,y:0,rot:8,frame:0}},
+    {t:980, jolt:{show:0}},
+    {t:1180, callout:'QUICK ATTACK', qa:{x:54,y:10,w:30,rot:180}, afterimage:'morty', m:{x:18,y:6,frame:1,face:1}},
+    {t:1400, m:{x:16,y:18,frame:2,face:1,rot:12}, sparking:'morty', impact:1, rp:22, r:{x:28,y:10,rot:12,frame:0}},
+    {t:1680, m:{x:22,y:28,frame:2,face:1,rot:-20}, sparking:'morty'},
+    {t:1860, impact:1, rp:36, r:{x:36,y:28,rot:16,frame:0}, m:{x:26,y:30,frame:2,face:1}},
+    {t:2140, m:{x:30,y:24,frame:2,face:1}, impact:1, rp:50, r:{x:44,y:20,rot:18,frame:0}},
+    {t:2460, callout:'FORWARD AIR', m:{x:40,y:20,frame:2,face:1,rot:-24}, sparking:'morty'},
+    {t:2680, impact:1, rp:72, r:{x:64,y:24,rot:28,frame:0}, m:{x:48,y:16,frame:2,face:1}},
+    {t:3000, r:{x:110,y:40,rot:70,frame:0,scale:.95}, m:{x:50,y:0,frame:4,face:-1}},
+    {t:3400, r:{x:165,y:58,rot:110,frame:0,scale:.75}, blast:'right', ko:'roman', m:{x:52,y:0,frame:4}},
+    {t:3900, banner:1}
    ]
   }
  ];
 
- let raf=0, playing=false, t0=0, current=null, lastImpact=0;
+ let raf=0, playing=false, t0=0, current=null, lastImpact=-999, lastRp=-1, lastMp=-1;
 
  function lerp(a,b,t){ return a+(b-a)*t; }
  function ease(t){ return t<.5 ? 2*t*t : 1-Math.pow(-2*t+2,2)/2; }
@@ -715,7 +755,6 @@ const FIGHT = __FIGHT__;
   const w=parseFloat(art.dataset.w)||0;
   art.style.backgroundPosition=(-frame*w)+'px 0';
  }
-
  function place(el, art, st, defaultFace){
   const face=st.face!=null?st.face:defaultFace;
   const sc=st.scale!=null?st.scale:1;
@@ -724,64 +763,57 @@ const FIGHT = __FIGHT__;
   art.style.transform='rotate('+(st.rot||0)+'deg) scale('+(face*sc)+','+sc+')';
   if(st.frame!=null) setFrame(art, st.frame);
  }
-
  function setPct(node, v){
   v=Math.max(0, Math.round(v));
+  const prev=node.dataset.v!=null?parseInt(node.dataset.v,10):0;
   node.textContent=v+'%';
+  node.dataset.v=String(v);
   node.classList.remove('mid','high','ko');
   if(v>=150) node.classList.add('ko');
   else if(v>=100) node.classList.add('high');
   else if(v>=50) node.classList.add('mid');
+  if(v>prev){
+   node.classList.remove('pop');
+   void node.offsetWidth;
+   if(!reduce) node.classList.add('pop');
+  }
  }
-
  function showFx(el, on){
   if(!el) return;
   if(on) el.classList.add('show'); else el.classList.remove('show');
  }
-
  function placeAbs(el, xPct, yPx){
   el.style.left=xPct+'%';
   el.style.bottom='calc(31.1% + '+(yPx||0)+'px)';
  }
-
  function clearGhosts(){
   ghosts.forEach(function(g){ if(g.parentNode) g.parentNode.removeChild(g); });
   ghosts.length=0;
  }
-
- function spawnGhost(fromEl, fromArt, meta){
+ function spawnGhost(fromEl){
   const g=fromEl.cloneNode(true);
   g.classList.add('ghost');
-  g.style.opacity='';
   stage.appendChild(g);
   ghosts.push(g);
-  setTimeout(function(){ if(g.parentNode) g.parentNode.removeChild(g); }, 280);
+  setTimeout(function(){ if(g.parentNode) g.parentNode.removeChild(g); }, 260);
  }
-
  function juice(){
   if(reduce) return;
   stage.classList.remove('shake','flash');
   void stage.offsetWidth;
   stage.classList.add('shake','flash');
  }
-
  function resetFx(){
-  showFx(callout,false);
-  showFx(bolt,false);
-  showFx(jolt,false);
-  showFx(slash,false);
-  showFx(cloud,false);
-  showFx(romanKo,false);
-  showFx(mortyKo,false);
-  showFx(banner,false);
-  showFx(sub,false);
-  romanEl.classList.remove('charging','countering');
-  mortyEl.classList.remove('charging','countering');
+  [callout,bolt,jolt,cloud,trail,arc,spark,qa,blast,romanKo,mortyKo,banner,sub].forEach(function(el){ showFx(el,false); });
+  romanEl.classList.remove('sparking');
+  mortyEl.classList.remove('sparking');
   stage.classList.remove('shake','flash');
   clearGhosts();
   banner.classList.remove('draw');
+  trail.className='blade-trail';
+  lastRp=-1; lastMp=-1;
+  rPct.dataset.v='0'; mPct.dataset.v='0';
  }
-
  function lastKey(keys, field, now){
   let found=null;
   for(let i=0;i<keys.length;i++){
@@ -802,28 +834,32 @@ const FIGHT = __FIGHT__;
   place(romanEl, romanArt, r, 1);
   place(mortyEl, mortyArt, m, -1);
 
-  const rpKeyA=lastKey(keys,'rp',now), rpKeyB=keys.find(function(k,idx){return idx>0 && k.t>now && k.rp!=null;});
-  // step percents to the last reached key (Smash meters jump on hit, with a short lerp)
   let rp=0, mp=0;
-  let prevRp=0, prevMp=0, rpT=0, mpT=0, rpFrom=0, mpFrom=0;
   keys.forEach(function(k){
-   if(k.rp!=null){
-     if(k.t<=now){ prevRp=rp; rp=k.rp; rpFrom=prevRp; rpT=k.t; }
-   }
-   if(k.mp!=null){
-     if(k.t<=now){ prevMp=mp; mp=k.mp; mpFrom=prevMp; mpT=k.t; }
-   }
+   if(k.rp!=null && k.t<=now) rp=k.rp;
+   if(k.mp!=null && k.t<=now) mp=k.mp;
   });
   setPct(rPct, rp);
   setPct(mPct, mp);
 
   const co=lastKey(keys,'callout',now);
-  if(co && now-co.t<700){ callout.textContent=co.callout; showFx(callout,true); }
+  if(co && now-co.t<800){ callout.textContent=co.callout; showFx(callout,true); }
   else showFx(callout,false);
 
-  const sl=lastKey(keys,'slash',now);
-  if(sl && sl.slash && now-sl.t<360){ placeAbs(slash, sl.slash.x, sl.slash.y); showFx(slash,true); }
-  else showFx(slash,false);
+  const tr=lastKey(keys,'trail',now);
+  if(tr && tr.trail && now-tr.t<320){
+   trail.className='blade-trail '+tr.trail.color+' show';
+   placeAbs(trail, tr.trail.x, tr.trail.y);
+   trail.style.transform='rotate('+(tr.trail.rot||0)+'deg)';
+  } else { trail.className='blade-trail'; showFx(trail,false); }
+
+  const tp=lastKey(keys,'tipper',now);
+  if(tp && tp.tipper && now-tp.t<400){ placeAbs(spark, tp.tipper.x, tp.tipper.y); showFx(spark,true); }
+  else showFx(spark,false);
+
+  const dl=lastKey(keys,'dolphin',now);
+  if(dl && dl.dolphin && now-dl.t<450){ placeAbs(arc, dl.dolphin.x, dl.dolphin.y); showFx(arc,true); }
+  else showFx(arc,false);
 
   const jt=lastKey(keys,'jolt',now);
   if(jt && jt.jolt && jt.jolt.show){ placeAbs(jolt, jt.jolt.x, jt.jolt.y); showFx(jolt,true); }
@@ -837,20 +873,40 @@ const FIGHT = __FIGHT__;
   if(cl && cl.cloud && cl.cloud.show){ cloud.style.left=cl.cloud.x+'%'; showFx(cloud,true); }
   else showFx(cloud,false);
 
-  romanEl.classList.toggle('countering', !!(lastKey(keys,'counter',now) && lastKey(keys,'counter',now).counter==='roman' && now-(lastKey(keys,'counter',now).t)<900));
-  mortyEl.classList.toggle('charging', !!(lastKey(keys,'charge',now) && lastKey(keys,'charge',now).charge==='morty' && now-(lastKey(keys,'charge',now).t)<900));
+  const qk=lastKey(keys,'qa',now);
+  if(qk && qk.qa && now-qk.t<280){
+   const q=qk.qa;
+   qa.style.left=q.x+'%';
+   qa.style.bottom='calc(31.1% + '+(q.y||0)+'px)';
+   qa.style.width=(q.w||28)+'px';
+   qa.style.transform='rotate('+(q.rot||0)+'deg)';
+   showFx(qa,true);
+  } else showFx(qa,false);
+
+  const sp=lastKey(keys,'sparking',now);
+  romanEl.classList.toggle('sparking', !!(sp && sp.sparking==='roman' && now-sp.t<500));
+  mortyEl.classList.toggle('sparking', !!(sp && sp.sparking==='morty' && now-sp.t<500));
 
   const ko=lastKey(keys,'ko',now);
   showFx(romanKo, !!(ko && (ko.ko==='roman'||ko.ko==='both')));
   showFx(mortyKo, !!(ko && (ko.ko==='morty'||ko.ko==='both')));
   if(ko && (ko.ko==='roman'||ko.ko==='both')){
-    romanKo.style.left='calc('+(r.x)+'% - 16px)';
-    romanKo.style.bottom='calc(31.1% + '+((r.y||0)+40)+'px)';
+    romanKo.style.left='calc('+(r.x)+'% - 14px)';
+    romanKo.style.bottom='calc(31.1% + '+((r.y||0)+36)+'px)';
   }
   if(ko && (ko.ko==='morty'||ko.ko==='both')){
-    mortyKo.style.left='calc('+(m.x)+'% - 16px)';
-    mortyKo.style.bottom='calc(31.1% + '+((m.y||0)+40)+'px)';
+    mortyKo.style.left='calc('+(m.x)+'% - 14px)';
+    mortyKo.style.bottom='calc(31.1% + '+((m.y||0)+36)+'px)';
   }
+
+  const bs=lastKey(keys,'blast',now);
+  if(bs && now-bs.t<500){
+   blast.className='blast show';
+   if(bs.blast==='right'){ blast.style.left='92%'; blast.style.top='38%'; }
+   else if(bs.blast==='left'){ blast.style.left='8%'; blast.style.top='38%'; }
+   else if(bs.blast==='bottom'){ blast.style.left='70%'; blast.style.top='88%'; }
+   else { blast.style.left='50%'; blast.style.top='40%'; }
+  } else { blast.className='blast'; }
 
   if(impactsOk){
    keys.forEach(function(k){
@@ -859,7 +915,7 @@ const FIGHT = __FIGHT__;
      juice();
     }
     if(k.afterimage && k.t<=now && now-k.t<40){
-     spawnGhost(k.afterimage==='morty'?mortyEl:romanEl, null, null);
+     spawnGhost(k.afterimage==='morty'?mortyEl:romanEl);
     }
    });
   }
@@ -876,22 +932,17 @@ const FIGHT = __FIGHT__;
   }
  }
 
- function endTime(outcome){
-  return outcome.keys[outcome.keys.length-1].t+400;
- }
-
+ function endTime(outcome){ return outcome.keys[outcome.keys.length-1].t+500; }
  function pickOutcome(id){
   if(id){
    for(let i=0;i<OUTCOMES.length;i++) if(OUTCOMES[i].id===id) return OUTCOMES[i];
   }
   return OUTCOMES[Math.floor(Math.random()*OUTCOMES.length)];
  }
-
  function stop(){
   playing=false;
   if(raf){ cancelAnimationFrame(raf); raf=0; }
  }
-
  function tick(now){
   if(!playing||!current) return;
   const t=now-t0;
@@ -899,12 +950,11 @@ const FIGHT = __FIGHT__;
   if(t>=endTime(current)){ playing=false; applyAt(current, endTime(current), false); return; }
   raf=requestAnimationFrame(tick);
  }
-
  function play(optId, seek, paused){
   stop();
   resetFx();
   lastImpact=-999;
-  current=pickOutcome(optId);
+  current=Object.assign({}, pickOutcome(optId), {});
   current=Object.assign({},current,{keys:carry(current.keys)});
   const last=endTime(current);
   if(reduce){
@@ -918,7 +968,6 @@ const FIGHT = __FIGHT__;
   }
   if(paused && seek!=null){
    applyAt(current, seek, false);
-   // If the seek is at/after the banner, show it
    playing=false;
    return;
   }
@@ -927,7 +976,6 @@ const FIGHT = __FIGHT__;
   t0=performance.now()-startSeek;
   raf=requestAnimationFrame(tick);
  }
-
  function openFight(optId, seek, paused){
   overlay.hidden=false;
   document.body.style.overflow='hidden';
@@ -939,7 +987,6 @@ const FIGHT = __FIGHT__;
   overlay.hidden=true;
   document.body.style.overflow='';
  }
-
  document.getElementById('fight-btn').addEventListener('click', function(e){ e.preventDefault(); e.stopPropagation(); openFight(); });
  overlay.querySelector('.fight-close').addEventListener('click', function(e){ e.preventDefault(); e.stopPropagation(); closeFight(); });
  overlay.querySelector('.fight-replay').addEventListener('click', function(e){ e.preventDefault(); e.stopPropagation(); play(); });
@@ -953,6 +1000,7 @@ const FIGHT = __FIGHT__;
   openFight(id==='1'?null:id, isNaN(at)?null:at, paused);
  }
 })();
+
 </script>
 </body></html>
 """

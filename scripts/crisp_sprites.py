@@ -150,13 +150,17 @@ def autocrop(frame: np.ndarray) -> np.ndarray:
 
 
 def foot_baseline(frame: np.ndarray) -> int:
-    """Lowest row with a wide stance (paws), ignoring a thin sword tip."""
+    """Lowest row with a solid stance (paws), ignoring thin sword tips or lightning FX."""
     alpha = frame[:, :, 3] > 0
-    rows = np.where(alpha.any(axis=1))[0]
+    row_w = alpha.sum(axis=1)
+    rows = np.where(row_w > 0)[0]
     if len(rows) == 0:
         return frame.shape[0] - 1
+    # Body/paws are much wider than sword tips or lightning bolts.
+    peak = int(row_w.max())
+    need = max(10, int(peak * 0.35))
     for y in range(rows[-1], rows[0] - 1, -1):
-        if int(alpha[y].sum()) >= 6:
+        if int(row_w[y]) >= need:
             return int(y)
     return int(rows[-1])
 
@@ -188,30 +192,35 @@ def quantize_sheet(frames: list[np.ndarray], colors: int = PALETTE_COLORS) -> li
     return out
 
 
-def pack_sheet(frames: list[np.ndarray], pad: int = 1) -> tuple[Image.Image, int, int, int]:
-    """Baseline-align frames onto a shared canvas and pack horizontally."""
+def pack_sheet(frames: list[np.ndarray], pad: int = 2) -> tuple[Image.Image, int, int, int]:
+    """Baseline-align frames onto a shared canvas and pack horizontally.
+
+    Cell width is large enough that no pose clips, with a shared foot-anchor.
+    """
     bases = [foot_baseline(f) for f in frames]
-    # space above feet, space below feet
-    above = max(b + 1 for f, b in zip(frames, bases) for b in [foot_baseline(f)])
-    # recompute properly
-    above = max(foot_baseline(f) + 1 for f in frames)
-    below = max(f.shape[0] - foot_baseline(f) - 1 for f in frames)
-    widths = [f.shape[1] for f in frames]
-    cell_w = max(widths) + pad * 2
-    cell_h = above + below + pad * 2
-    # extra pad top in case
+    above = max(b + 1 for b in bases)
+    below = max(f.shape[0] - b - 1 for f, b in zip(frames, bases))
+    foot_cxs = []
+    lefts = []
+    rights = []
+    for f, b in zip(frames, bases):
+        foot = f[max(0, b - 3): b + 1]
+        xs = np.where(foot[:, :, 3] > 0)[1] if foot.size else np.array([])
+        foot_cx = int(xs.mean()) if len(xs) else f.shape[1] // 2
+        foot_cxs.append(foot_cx)
+        lefts.append(foot_cx + pad)
+        rights.append(f.shape[1] - foot_cx + pad)
+    left_need = max(lefts)
+    right_need = max(rights)
+    cell_w = left_need + right_need
+    target_cx = left_need
     top_pad = pad
-    canvas_h = cell_h
+    canvas_h = above + below + pad * 2
     canvas_w = cell_w * len(frames)
     sheet = np.zeros((canvas_h, canvas_w, 4), dtype=np.uint8)
     for i, f in enumerate(frames):
         b = foot_baseline(f)
-        # Anchor the stance (foot center) at 42% of the cell so swords can extend right.
-        foot = f[max(0, b - 3): b + 1]
-        xs = np.where(foot[:, :, 3] > 0)[1] if foot.size else np.array([])
-        foot_cx = int(xs.mean()) if len(xs) else f.shape[1] // 2
-        target_cx = int(cell_w * 0.42)
-        x0 = i * cell_w + target_cx - foot_cx
+        x0 = i * cell_w + target_cx - foot_cxs[i]
         y0 = top_pad + (above - (b + 1))
         y1 = y0 + f.shape[0]
         x1 = x0 + f.shape[1]
@@ -221,7 +230,7 @@ def pack_sheet(frames: list[np.ndarray], pad: int = 1) -> tuple[Image.Image, int
         fy0, fx0 = ys - y0, xs - x0
         sheet[ys:ye, xs:xe] = f[fy0 : fy0 + (ye - ys), fx0 : fx0 + (xe - xs)]
     # Foot line as a fraction of canvas height, for CSS transform-origin.
-    anchor_x = 0.42
+    anchor_x = round(target_cx / cell_w, 4) if cell_w else 0.5
     anchor_y = (top_pad + above) / canvas_h if canvas_h else 1.0
     return Image.fromarray(sheet, "RGBA"), cell_w, canvas_h, len(frames), anchor_x, round(anchor_y, 4)
 
@@ -296,6 +305,7 @@ def main():
     metas["roman_idle"] = process(ROOT / "roman_idle8.jpg", "roman_idle")
     metas["morty_idle"] = process(ROOT / "morty_idle8.jpg", "morty_idle")
     metas["roman_fight"] = process(ROOT / "roman_sword.jpg", "roman_fight")
+    metas["morty_fight"] = process(ROOT / "morty_fight.jpg", "morty_fight")
     compress_stage()
     (OUT / "sprites.json").write_text(json.dumps(metas, indent=2))
     print("wrote", OUT / "sprites.json")
