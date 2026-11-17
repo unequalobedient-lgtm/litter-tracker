@@ -860,7 +860,7 @@ const fxCtx=(fxCanvas && fxCanvas.getContext)?fxCanvas.getContext('2d'):null;
      const P=defSide==='roman'?k.r:k.m;
      if(!P) return;
      const face=P.face||(defSide==='roman'?1:-1);
-     if(defend==='dodge'){ P.y=8; P.rot=face*-40; P.x=clampX(P.x-face*14,8,94); P.scale=.92; }
+     if(defend==='dodge'){ P.y=8; P.rot=face*-40; P.x=clampX(P.x-face*14,HUD_SAFE_L,HUD_SAFE_R); P.scale=.92; }
      else if(defend==='shield'){ P.y=0; P.rot=face*4; P.x=clampX(P.x+face*4,12,90); P.scale=1; k.blockSpark={x:P.x,y:22}; }
     }
    });
@@ -1008,6 +1008,8 @@ const fxCtx=(fxCanvas && fxCanvas.getContext)?fxCanvas.getContext('2d'):null;
      To move another fighter onto this system: give its kit anim:2 and build its moves with
      strike() / jumpIn() / koLaunch() and a per-fighter swipe palette. Mechanics stay in composeFight. */
   const ANIM_SLOW=1.5;
+  // Non-KO knockback stays inside these x% bounds so a tumbling cat never slides under the % HUD boxes.
+  const HUD_SAFE_L=17, HUD_SAFE_R=83;
   function fdt(n){ return n*(1000/60)*ANIM_SLOW/0.68; }   // SSBU frames -> pre-scale segment ms
   function EZ(ctx, atkEase, defEase){ const o={}; o[ctx.atk==='roman'?'ezr':'ezm']=atkEase; o[ctx.atk==='roman'?'ezm':'ezr']=defEase; return o; }
   function isBlocked(s){ return s._defend==='shield' || s._defend==='dodge'; }
@@ -1040,11 +1042,11 @@ const fxCtx=(fxCanvas && fxCanvas.getContext)?fxCanvas.getContext('2d'):null;
    add(t+S*0.6, Object.assign({fs:0}, EZ(ctx,'out','inout'), o.dust?{dust:{by:ctx.atk}}:{}), function(s){
     const K=sides(s,ctx.atk), P=K.A(), d=K.dir();
     P.frame=fr[o.wind||'aerial']; P.x=clampX(P.x-d*(o.lean!=null?o.lean:3),12,88);
-    P.sx=1.08; P.sy=.9; P.rot=-(o.tilt!=null?o.tilt:4)*d; P.y=hop?hop:0;
+    P.sx=1.08; P.sy=.9; P.rot=(o.spin!=null?o.spin-25:-(o.tilt!=null?o.tilt:4))*d; P.y=hop?hop:0;
    });
    add(t+S, Object.assign({}, EZ(ctx,'inout','inout'), o.sw?{sw:Object.assign({by:ctx.atk, dur:Math.round(A*0.68)+60}, o.sw)}:{}), function(s){
     const K=sides(s,ctx.atk), P=K.A(), d=K.dir();
-    P.sx=1.03; P.sy=.96; P.rot=-(o.tilt!=null?o.tilt+2:6)*d;
+    P.sx=1.03; P.sy=.96; P.rot=(o.spin!=null?o.spin-12:-(o.tilt!=null?o.tilt+2:6))*d;
    });
    const hitT=t+S+fdt(1);
    const k=add(hitT, Object.assign({impact:1, fs:0, hl:otherSide(ctx.atk)}, EZ(ctx,'snap','snap'), o.extra||{}), function(s){
@@ -1052,17 +1054,17 @@ const fxCtx=(fxCanvas && fxCanvas.getContext)?fxCanvas.getContext('2d'):null;
     P.frame=fr[o.hit||'attack']; P.x=clampX(P.x+d*(o.lunge!=null?o.lunge:8),12,88);
     const gap=o.minGap!=null?o.minGap:12;
     if((D.x-P.x)*d<gap) P.x=clampX(D.x-d*gap,12,88);
-    P.sx=1.13; P.sy=.9; P.rot=3*d;
+    P.sx=1.13; P.sy=.9; P.rot=(o.spin!=null?o.spin:3)*d;
     if(o.part!=null) dealPart(s, ctx, o.part); else K.hurt(o.dmg||10);
-    if(!blocked){ D.x=clampX(D.x+d*(1.5+3*kb),8,92); D.rot=(6+14*kb)*d; D.sx=.88; D.sy=1.1; D.y=Math.max(D.y||0, hop*0.6); }
+    if(!blocked){ D.x=clampX(D.x+d*(1.5+3*kb),HUD_SAFE_L,HUD_SAFE_R); D.rot=(6+14*kb)*d; D.sx=.88; D.sy=1.1; D.y=Math.max(D.y||0, hop*0.6); }
    });
    if(o.tip){ const D=k[defKey(ctx)]; k.tipper={x:D.x, y:(D.y||0)+18}; }
    add(hitT+A, EZ(ctx,'out','out'), function(s){
     const K=sides(s,ctx.atk), P=K.A(), D=K.D(), d=K.dir();
-    P.sx=1.05; P.sy=.97; P.rot=0;
+    P.sx=1.05; P.sy=.97; P.rot=(o.spin!=null?o.spin+15:0)*d;
     if(!blocked && !o.keep){
-     D.x=clampX(D.x+d*(2+9*kb),8,92);
-     D.y=o.launch?(10+34*kb):(hop?hop*0.6:0)+2+6*kb;
+     D.x=clampX(D.x+d*(2+9*kb),HUD_SAFE_L,HUD_SAFE_R);
+     D.y=o.launch?(10+34*kb):(hop?hop*0.6:0)+2+6*kb+(kb>0.62?14+16*kb:0);
      D.rot=(kb>0.62?(200+150*kb):(10+22*kb))*d; D.sx=1; D.sy=1;
     }
    });
@@ -1096,22 +1098,30 @@ const fxCtx=(fxCanvas && fxCanvas.getContext)?fxCanvas.getContext('2d'):null;
    return t+fdt(frames||8);
   }
   // Killing blow follow-up: tumble off the blast zone, attacker strikes a victory pose.
-  function koLaunch(add, s, ctx, t, marks, up){
+  /* Killing blow follow-up. mode: false/'side' = horizontal blast zone, true/'up' = launched upward with the
+     attacker rising after it (Dolphin Slash), 'upStay' = launched upward, attacker stays grounded (Thunder),
+     'down' = meteor through the stage (spikes). */
+  function koLaunch(add, s, ctx, t, marks, mode){
    const fr=frOf(ctx,'atk');
-   add(t+fdt(12), EZ(ctx,'out','out'), function(s){
+   const up=(mode===true||mode==='up'||mode==='upStay'), rise=(mode===true||mode==='up'), down=(mode==='down');
+   add(t+fdt(12), EZ(ctx,'out',down?'in':'out'), function(s){
     const K=sides(s,ctx.atk), D=K.D(), d=K.dir();
-    if(up){ D.y=110; D.x=clampX(D.x+d*8,-20,126); D.rot=300*d; const P=K.A(); P.y=72; P.frame=fr.victory; P.sx=.94; P.sy=1.08; }
+    if(up){ D.y=110; D.x=clampX(D.x+d*8,-20,126); D.rot=300*d; if(rise){ const P=K.A(); P.y=72; P.frame=fr.victory; P.sx=.94; P.sy=1.08; } }
+    else if(down){ D.y=-30; D.x=clampX(D.x+d*4,8,92); D.rot=200*d; }
     else { D.x=clampX(D.x+d*30,-20,126); D.y=42; D.rot=280*d; }
     D.scale=.88; D.sx=1; D.sy=1;
    });
    t+=fdt(26); marks.ko=t;
-   add(t, Object.assign({blast:up?{x:sides(s,ctx.atk).D().x, top:6}:koBlast(ctx.def), ko:ctx.def}, EZ(ctx,up?'in':'back','in'), up?{dust:{by:ctx.atk}}:{}), function(s){
+   const bz=up?{x:sides(s,ctx.atk).D().x, top:6}:(down?'bottom':koBlast(ctx.def));
+   add(t, Object.assign({blast:bz, ko:ctx.def}, EZ(ctx,rise?'in':'back',down?'in':'in'), rise?{dust:{by:ctx.atk}}:{}), function(s){
     const K=sides(s,ctx.atk), D=K.D(), d=K.dir();
-    if(up){ D.y=240; D.rot=560*d; D.scale=.7; } else { flyOff(D, ctx.def); D.rot=(ctx.def==='roman'?-1:1)*540; }
+    if(up){ D.y=240; D.rot=560*d; D.scale=.7; }
+    else if(down){ D.y=-190; D.rot=400*d; D.scale=.72; }
+    else { flyOff(D, ctx.def); D.rot=(ctx.def==='roman'?-1:1)*540; }
     winPose(K.A(), fr); K.A().sx=1; K.A().sy=1;
    });
    t+=440; marks.banner=t;
-   add(t, {banner:1, blast:up?'bottom':koBlast(ctx.def), ko:ctx.def});
+   add(t, {banner:1, blast:up?'bottom':(down?'bottom':koBlast(ctx.def)), ko:ctx.def});
    return t;
   }
 
@@ -1318,172 +1328,244 @@ const fxCtx=(fxCanvas && fxCanvas.getContext)?fxCanvas.getContext('2d'):null;
    }
   };
 
+  /* Pikachu on Animation v2. Frame data: ultimateframedata.com/pikachu. Play style: ESAM-style aggression
+     (Thunder Jolt pressure, nair dragdowns, bair/fair strings, up-air bridges), per SmashWiki + Game8.
+     Sheet frames: 0 ready, 1 lunge/leap, 2 curled spin ball, 3 paw-out jolt, 4 arms-up thunder.
+     Electric hits carry elec:1 -> renderer adds a spark burst and 1.5x hitlag (SSBU electric hitlag). */
+  const PIKA_TAIL={col:'#ffe24a', glow:'#fff3a0', r:40, dx:-4, dy:22, w:11};
+  function ptail(a0, a1, extra){ return Object.assign({}, PIKA_TAIL, {a0:a0, a1:a1}, extra||{}); }
+  function zipKey(s, ctx, fromP){ const P=sides(s,ctx.atk).A(); return {x0:fromP.x, y0:(fromP.y||0)+20, x1:P.x, y1:(P.y||0)+20}; }
+
+  function pikaQuickAttack(){
+   return makeSeg('def', function(s,rng,ctx,add,marks){
+    resetStance(s); add(0);
+    // QA in Ultimate can't be cancelled: two angled zips (hits on f15 and f29), the second one into the foe.
+    add(fdt(8), Object.assign({fs:0, sparking:ctx.atk}, EZ(ctx,'out','inout')), function(s){ const K=sides(s,ctx.atk), P=K.A(), d=K.dir(); P.frame=0; P.sx=1.14; P.sy=.84; P.rot=-6*d; });
+    const p0=Object.assign({}, sides(s,ctx.atk).A());
+    const k1=add(fdt(14), Object.assign({fs:0, afterimage:ctx.atk}, EZ(ctx,'snap','inout')), function(s){
+     const K=sides(s,ctx.atk), P=K.A(), d=K.dir(); P.frame=1; P.x=clampX(P.x+(K.D().x-P.x)*0.45,12,88); P.y=38; P.sx=1.22; P.sy=.82; P.rot=-28*d;
+    });
+    k1.zip=zipKey(s, ctx, p0);
+    add(fdt(20), Object.assign({}, EZ(ctx,'out','inout')), function(s){ const K=sides(s,ctx.atk), P=K.A(), d=K.dir(); P.sx=1; P.sy=1; P.rot=20*d; P.frame=2; });
+    const p1=Object.assign({}, sides(s,ctx.atk).A());
+    const r=strike(add, s, ctx, fdt(22), {S:5, A:4, E:18, wind:'aerial', hit:'attack', lean:0, lunge:6, minGap:8, tilt:-20, dmg:rng.ri(3,6), extra:{elec:1, afterimage:ctx.atk}});
+    r.key.zip={x0:p1.x, y0:(p1.y||0)+20, x1:r.key[atkKey(ctx)].x, y1:20};
+    marks.swing=r.hitT;
+    return r.t+fdt(3);
+   });
+  }
+  function pikaJolt(followNair){
+   return makeSeg('def', function(s,rng,ctx,add,marks){
+    resetStance(s); add(0);
+    // Thunder Jolt: 19f startup, a spark ball that hops along the ground into the foe.
+    add(fdt(10), Object.assign({fs:0, sparking:ctx.atk}, EZ(ctx,'out','inout')), function(s){ const K=sides(s,ctx.atk), P=K.A(), d=K.dir(); P.frame=0; P.sx=1.1; P.sy=.88; P.rot=-8*d; P.x=clampX(P.x-d*2,12,88); });
+    const rel=fdt(19);
+    const K0=sides(s,ctx.atk);
+    const travel=fdt(Math.max(10, Math.round(Math.abs(K0.D().x-K0.A().x)*0.55)));
+    const kr=add(rel, Object.assign({fs:0}, EZ(ctx,'snap','inout')), function(s){ const K=sides(s,ctx.atk), P=K.A(), d=K.dir(); P.frame=3; P.sx=1.12; P.sy=.92; P.rot=4*d; });
+    const A0=kr[atkKey(ctx)], D0=kr[defKey(ctx)];
+    kr.ball={x0:A0.x+(A0.face||1)*6, x1:D0.x, dur:Math.round(travel*0.68), hops:2};
+    add(rel+fdt(10), EZ(ctx,'back','inout'), function(s){ const P=sides(s,ctx.atk).A(); P.frame=0; P.sx=1; P.sy=1; P.rot=0; });
+    const blocked=isBlocked(s);
+    const hitT=Math.max(rel+travel, rel+fdt(11));
+    const kb=hitKb((s._hitDmg!=null && !s._finisherMove)?s._hitDmg:6);
+    const kh=add(hitT, Object.assign({impact:1, elec:1, hl:otherSide(ctx.atk)}, EZ(ctx,'inout','snap')), function(s){
+     const K=sides(s,ctx.atk), D=K.D(), d=K.dir(); K.hurt(rng.ri(4,7));
+     if(!blocked){ D.x=clampX(D.x+d*(1+3*kb),HUD_SAFE_L,HUD_SAFE_R); D.rot=(6+14*kb)*d; D.sx=.88; D.sy=1.1; D.y=4+8*kb; }
+    });
+    marks.swing=hitT;
+    let t=hitT+fdt(8);
+    add(t, EZ(ctx,'inout','out'), function(s){ const K=sides(s,ctx.atk), D=K.D(); if(!blocked){ D.y=0; D.rot=0; D.sx=1.08; D.sy=.92; } });
+    t+=fdt(6);
+    add(t, EZ(ctx,'inout','back'), function(s){ const D=sides(s,ctx.atk).D(); D.sx=1; D.sy=1; });
+    if(followNair && !blocked){
+     // Jolt -> dash in -> landing nair (jolt combos into anything, per SmashWiki).
+     t=dashTo(add, s, ctx, t, 10, 6);
+     t=jumpIn(add, s, ctx, t, 16, 2);
+     const r=strike(add, s, ctx, t, {S:3, A:4, E:12, wind:'aerial', hit:'aerial', hop:16, lean:0, lunge:2, minGap:8, kb:.15, dmg:0, part:0, extra:{elec:1, zr:{by:ctx.atk, dur:260}}});
+     t=r.t;
+    }
+    return t+fdt(3);
+   });
+  }
+  function pikaDashAttack(){
+   return makeSeg('def', function(s,rng,ctx,add,marks){
+    resetStance(s); add(0);
+    let t=dashTo(add, s, ctx, 0, 20, 8);
+    const r=strike(add, s, ctx, t, {S:6, A:3, E:18, wind:'ready', hit:'attack', lean:2, lunge:9, minGap:8, tilt:-8, dmg:rng.ri(8,11), dust:true, extra:{elec:1}});
+    marks.swing=r.hitT;
+    return r.t+fdt(3);
+   });
+  }
+  function pikaFtilt(){
+   return makeSeg('def', function(s,rng,ctx,add,marks){
+    resetStance(s); add(0);
+    let t=dashTo(add, s, ctx, 0, 13, 6);
+    // Forward tilt: 6f two-footed electric kick.
+    const r=strike(add, s, ctx, t, {S:6, A:3, E:21, wind:'ready', hit:'attack', lean:3, lunge:4, minGap:9, tilt:-10, dmg:rng.ri(8,10), extra:{elec:1}});
+    marks.swing=r.hitT;
+    return r.t+fdt(3);
+   });
+  }
+  function pikaNair(){
+   return makeSeg('def', function(s,rng,ctx,add,marks){
+    resetStance(s); add(0);
+    let t=dashTo(add, s, ctx, 0, 10, 6);
+    t=jumpIn(add, s, ctx, t, 26, 3);
+    // Nair hits on f3/9/15/21 while curled in a crackling ball; fast-fall dragdown, then up tilt pops them.
+    const parts=splitHit(s, [0.16,0.16,0.18,0.5], 8);
+    const S=[3,5,5,5];
+    for(let i=0;i<4;i++){
+     const last=i===3;
+     const r=strike(add, s, ctx, t, {S:S[i], A:last?2:3, E:last?16:0, wind:'aerial', hit:'aerial', hop:Math.max(4, 26-i*7), lean:0, lunge:1, minGap:7, tilt:i%2?-30:30, part:parts[i], kb:last?null:.08, keep:!last, extra:{elec:1, zr:i===0?{by:ctx.atk, dur:Math.round(fdt(22)*0.68)}:null}});
+     if(i===0) marks.swing=r.hitT;
+     t=r.t;
+    }
+    return t+fdt(3);
+   });
+  }
+  function pikaBair(){
+   return makeSeg('def', function(s,rng,ctx,add,marks){
+    resetStance(s); add(0);
+    let t=dashTo(add, s, ctx, 0, 12, 6);
+    t=jumpIn(add, s, ctx, t, 30, 4);
+    // Bair: horizontal skydiver spin, hits every 4f from f4 (6 hits) + landing hit. Great combo starter.
+    const parts=splitHit(s, [0.08,0.08,0.08,0.08,0.08,0.3,0.3], 9);
+    for(let i=0;i<6;i++){
+     const r=strike(add, s, ctx, t, {S:i===0?4:3, A:1, wind:'aerial', hit:'aerial', hop:30-i*4, lean:0, lunge:1, minGap:7, spin:30+i*55, part:parts[i], kb:.06, keep:true, extra:{elec:1, zr:i===0?{by:ctx.atk, dur:Math.round(fdt(26)*0.68)}:null}});
+     if(i===0) marks.swing=r.hitT;
+     t=r.t;
+    }
+    add(t+fdt(2), EZ(ctx,'out','inout'), function(s){ const K=sides(s,ctx.atk), P=K.A(); P.rot=360*K.dir(); });
+    add(t+fdt(2)+1, EZ(ctx,'hold','inout'), function(s){ sides(s,ctx.atk).A().rot=0; });
+    t+=fdt(2)+1;
+    const r=strike(add, s, ctx, t, {S:3, A:2, E:18, wind:'aerial', hit:'attack', hop:0, lean:0, lunge:2, minGap:8, tilt:0, part:parts[6], dust:true, extra:{elec:1}});
+    return r.t+fdt(3);
+   });
+  }
+  function pikaFair(){
+   return makeSeg('def', function(s,rng,ctx,add,marks){
+    resetStance(s); add(0);
+    let t=dashTo(add, s, ctx, 0, 16, 6);
+    t=jumpIn(add, s, ctx, t, 34, 5);
+    // Fair: 11f drill — spins down into the foe with rapid hits, final hit on f27.
+    const parts=splitHit(s, [0.1,0.1,0.1,0.1,0.6], 9);
+    for(let i=0;i<5;i++){
+     const last=i===4;
+     const r=strike(add, s, ctx, t, {S:i===0?11:3, A:last?2:1, E:last?14:0, wind:'aerial', hit:'aerial', hop:Math.max(0, 30-i*8), lean:0, lunge:2, minGap:6, tilt:-(30+i*72), part:parts[i], kb:last?null:.06, keep:!last, extra:{elec:1, zr:i===0?{by:ctx.atk, dur:Math.round(fdt(20)*0.68)}:null}});
+     if(i===0) marks.swing=r.hitT;
+     t=r.t;
+    }
+    return t+fdt(3);
+   });
+  }
+  function pikaUairBridge(){
+   return makeSeg('def', function(s,rng,ctx,add,marks){
+    resetStance(s); add(0);
+    let t=dashTo(add, s, ctx, 0, 9, 6);
+    // Up tilt (7f tail flick) pops them up, then up-air tail chops (4f) carry them higher: an up-air bridge.
+    const parts=splitHit(s, [0.3,0.3,0.4], 9);
+    const u=strike(add, s, ctx, t, {S:7, A:4, wind:'ready', hit:'ready', lean:1, lunge:1, minGap:10, tilt:8, sw:ptail(205,70,{dy:12, r:42}), part:parts[0], kb:.1, keep:true});
+    marks.swing=u.hitT;
+    add(u.t+fdt(4), EZ(ctx,'inout','out'), function(s){ const K=sides(s,ctx.atk), D=K.D(); D.y=46; D.rot=-8*K.dir(); D.x=clampX(K.A().x+K.dir()*7,8,92); });
+    t=jumpIn(add, s, ctx, u.t+fdt(4), 22, 0);
+    const a1=strike(add, s, ctx, t, {S:4, A:3, wind:'aerial', hit:'attack', hop:24, lean:0, lunge:0, minGap:6, tilt:-30, sw:ptail(215,35,{dy:12, r:44}), part:parts[1], kb:.1, keep:true});
+    add(a1.t+fdt(4), EZ(ctx,'out','out'), function(s){ const K=sides(s,ctx.atk), D=K.D(), P=K.A(); D.y=76; P.y=40; D.rot=10*K.dir(); D.x=clampX(P.x+K.dir()*6,8,92); });
+    const r=strike(add, s, ctx, a1.t+fdt(4), {S:4, A:3, E:16, wind:'aerial', hit:'attack', hop:44, lean:0, lunge:0, minGap:6, tilt:-30, sw:ptail(215,35,{dy:12, r:46}), part:parts[2], launch:true});
+    return r.t+fdt(3);
+   });
+  }
+
   KITS.pikachu={
    frames:F_PIKA,
-   heavy:['grab-aerial','spin-nair'],
-   openings:{
-    'qa-rush':makeSeg('def', function(s,rng,ctx,add,marks){
-     const fr=F_PIKA;
-     resetStance(s); add(0);
-     add(220, {qa:{x:midX(s),y:10,w:36,rot:-30}, afterimage:ctx.atk}, function(s){
-      const K=sides(s,ctx.atk); K.A().x=clampX(midX(s),16,86); K.A().y=12; K.A().frame=fr.attack;
-     });
-     const hit=rng.chance(0.7);
-     if(hit){
-      const dmg=rng.ri(3,6);
-      add(480, {impact:1}, function(s){
-       const K=sides(s,ctx.atk); const A=K.A(), D=K.D(), d=K.dir();
-       K.hurt(dmg); A.x=clampX(D.x-d*12,16,86); A.y=4; A.frame=fr.attack; D.rot=8*d; D.x=clampX(D.x-d*3,16,86);
-      });
-     } else {
-      add(480, {qa:{x:midX(s)-8,y:8,w:28,rot:-10}, afterimage:ctx.atk}, function(s){
-       const K=sides(s,ctx.atk); K.A().x=clampX(K.D().x-K.dir()*18,16,86); K.A().y=8; K.A().frame=fr.attack;
-      });
-     }
-     add(860, null, function(s){ resetStance(s); });
-     return 1000;
-    }),
-    'jolt-poke':makeSeg('def', function(s,rng,ctx,add,marks){
-     const fr=F_PIKA;
-     resetStance(s); add(0);
-     add(180, {jolt:{show:1,x:sides(s,ctx.atk).A().x,y:10}}, function(s){ sides(s,ctx.atk).A().frame=fr.special; });
-     add(380, {jolt:{show:1,x:midX(s),y:8}});
-     const dmg=rng.ri(6,8);
-     add(560, {impact:1, jolt:{show:1,x:sides(s,ctx.atk).D().x,y:6}}, function(s){
-      const K=sides(s,ctx.atk); K.hurt(dmg); K.D().rot=-10*K.dir(); K.D().x=clampX(K.D().x+K.dir()*4,16,90);
-     });
-     add(900, {jolt:{show:0}}, function(s){ resetStance(s); });
-     return 1040;
-    })
-   },
+   anim:2,
+   heavy:['spin-nair','uair-bridge'],
+   openings:{ 'qa-rush':pikaQuickAttack(), 'jolt-poke':pikaJolt(false), 'dash-attack':pikaDashAttack() },
    mids:{
-    'grab-aerial':makeSeg('def', function(s,rng,ctx,add,marks){
-     const fr=F_PIKA;
-     resetStance(s); add(0);
-     add(200, {qa:{x:midX(s)+8,y:6,w:30,rot:-20}, afterimage:ctx.atk}, function(s){
-      const K=sides(s,ctx.atk); K.A().x=K.D().x-K.dir()*14; K.A().y=4; K.A().frame=fr.attack;
-     });
-     add(400, null, function(s){ const K=sides(s,ctx.atk); K.A().x=K.D().x-K.dir()*8; K.A().y=2; K.A().frame=fr.ready; K.D().rot=6*K.dir(); });
-     const dthrow=rng.ri(5,7);
-     add(620, {impact:1}, function(s){ const K=sides(s,ctx.atk); K.hurt(dthrow); K.D().y=22; K.D().x=clampX(K.D().x+K.dir()*6,16,86); K.D().rot=12*K.dir(); K.A().frame=fr.attack; });
-     let t=620;
-     const nairs=rng.ri(2,3);
-     for(let i=0;i<nairs;i++){
-      t+=rng.ri(240,280);
-      const dmg=rng.ri(8,12);
-      add(t, {impact:1, sparking:ctx.atk}, function(s){
-       const K=sides(s,ctx.atk); const A=K.A(), D=K.D(), d=K.dir();
-       A.frame=fr.aerial; A.y=18+i*4; A.x=D.x-d*4; A.rot=(i%2?-16:14)*d;
-       K.hurt(dmg); D.y=20+i*5; D.rot=(10+i*6)*d;
-      });
-     }
-     t+=300;
-     add(t, null, function(s){ resetStance(s); });
-     return t+160;
-    }),
-    'qa-pressure':makeSeg('def', function(s,rng,ctx,add,marks){
-     const fr=F_PIKA;
-     resetStance(s); add(0);
-     add(180, {qa:{x:midX(s)+10,y:12,w:32,rot:200}, afterimage:ctx.atk}, function(s){ const K=sides(s,ctx.atk); K.A().x=clampX(midX(s),16,86); K.A().y=14; K.A().frame=fr.attack; });
-     add(380, {qa:{x:midX(s)-8,y:8,w:28,rot:160}, afterimage:ctx.atk}, function(s){ const K=sides(s,ctx.atk); K.A().x=clampX(K.D().x-K.dir()*8,16,86); K.A().y=8; K.A().frame=fr.attack; });
-     const dmg=rng.ri(4,7);
-     add(600, {impact:1, qa:{x:sides(s,ctx.atk).D().x,y:4,w:24,rot:10}}, function(s){
-      const K=sides(s,ctx.atk); K.hurt(dmg); K.A().x=K.D().x-K.dir()*10; K.A().y=2; K.D().rot=8*K.dir(); K.D().x=clampX(K.D().x-K.dir()*4,16,86);
-     });
-     if(rng.chance(0.6)){
-      const dmg2=rng.ri(6,10);
-      add(840, {impact:1, sparking:ctx.atk}, function(s){ const K=sides(s,ctx.atk); K.A().frame=fr.aerial; K.A().y=16; K.hurt(dmg2); K.D().y=10; K.D().rot=12*K.dir(); });
-      add(1120, null, function(s){ resetStance(s); });
-      return 1260;
-     }
-     add(920, null, function(s){ resetStance(s); });
-     return 1080;
-    }),
-    'jolt-bounce':makeSeg('def', function(s,rng,ctx,add,marks){
-     const fr=F_PIKA;
-     resetStance(s); add(0);
-     add(160, {jolt:{show:1,x:sides(s,ctx.atk).A().x,y:6}}, function(s){ sides(s,ctx.atk).A().frame=fr.special; });
-     add(340, {jolt:{show:1,x:midX(s)+6,y:14}});
-     add(500, {jolt:{show:1,x:midX(s)-8,y:4}});
-     const dmg=rng.ri(6,9);
-     add(680, {impact:1, jolt:{show:1,x:sides(s,ctx.atk).D().x,y:8}}, function(s){ const K=sides(s,ctx.atk); K.hurt(dmg); K.D().rot=-8*K.dir(); K.D().x=clampX(K.D().x+K.dir()*3,16,90); });
-     add(960, {jolt:{show:0}}, function(s){ resetStance(s); });
-     return 1100;
-    }),
-    'spin-nair':makeSeg('def', function(s,rng,ctx,add,marks){
-     const fr=F_PIKA;
-     resetStance(s); add(0);
-     add(200, {qa:{x:midX(s),y:10,w:28,rot:-24}, afterimage:ctx.atk}, function(s){ const K=sides(s,ctx.atk); K.A().x=K.D().x-K.dir()*18; K.A().y=16; K.A().frame=fr.aerial; });
-     const dmg=rng.ri(8,12);
-     add(440, {impact:1, sparking:ctx.atk}, function(s){ const K=sides(s,ctx.atk); K.A().x=K.D().x-K.dir()*6; K.A().y=14; K.A().frame=fr.aerial; K.A().rot=-18*K.dir(); K.hurt(dmg); K.D().rot=10*K.dir(); K.D().y=8; });
-     const dmg2=rng.ri(7,11);
-     add(700, {impact:1, sparking:ctx.atk}, function(s){ const K=sides(s,ctx.atk); K.A().rot=16*K.dir(); K.A().y=18; K.hurt(dmg2); K.D().y=14; K.D().x=clampX(K.D().x-K.dir()*6,16,86); });
-     add(1020, null, function(s){ resetStance(s); });
-     return 1160;
-    })
+    'spin-nair':pikaNair(),
+    bair:pikaBair(),
+    fair:pikaFair(),
+    'uair-bridge':pikaUairBridge(),
+    ftilt:pikaFtilt(),
+    'jolt-bounce':pikaJolt(true)
    },
    finishers:{
     thunder:makeSeg('def', function(s,rng,ctx,add,marks){
-     const fr=F_PIKA;
-     resetStance(s);
-     pose(s,ctx.atk).x=ctx.atk==='roman'?28:72;
-     pose(s,ctx.def).x=ctx.def==='roman'?28:72;
-     faceSt(s); add(0);
-     add(220, null, function(s){ sides(s,ctx.atk).A().frame=fr.victory; });
-     marks.thunder=480;
-     add(480, {cloud:{show:1,x:sides(s,ctx.atk).D().x}}, function(s){ sides(s,ctx.atk).A().frame=fr.victory; });
-     const dmg=rng.ri(12,16);
-     marks.bolt=820;
-     add(820, {cloud:{show:1,x:sides(s,ctx.atk).D().x}, bolt:{show:1,x:sides(s,ctx.atk).D().x}, impact:1}, function(s){
-      const K=sides(s,ctx.atk); K.hurt(dmg); K.D().rot=16*K.dir(); K.D().y=8; K.D().frame=0;
-     });
-     add(1120, {cloud:{show:0}, bolt:{show:0}}, function(s){ const K=sides(s,ctx.atk); K.D().x=clampX(K.D().x-K.dir()*18,0,100); K.D().y=28; K.D().rot=50*K.dir(); K.D().scale=.95; });
-     marks.ko=1480;
-     add(1480, {blast:koBlast(ctx.def), ko:ctx.def}, function(s){ const K=sides(s,ctx.atk); flyOff(K.D(), ctx.def); winPose(K.A(), fr); });
-     marks.banner=1920;
-     add(1920, {banner:1, blast:koBlast(ctx.def), ko:ctx.def});
-     return 1920;
-    }),
-    aerial:makeSeg('def', function(s,rng,ctx,add,marks){
-     const fr=F_PIKA;
+     // Up throw -> Thunder (the classic Pikachu kill confirm, ~170%+). The foe is headbutted straight up,
+     // the bolt comes down through the foe onto Pikachu's head. Damage only ever goes to the defender.
      resetStance(s); add(0);
-     add(200, {qa:{x:midX(s),y:10,w:30,rot:-20}, afterimage:ctx.atk}, function(s){ const K=sides(s,ctx.atk); K.A().x=K.D().x-K.dir()*16; K.A().y=16; K.A().frame=fr.aerial; });
-     let t=200;
-     const hits=3;
-     for(let i=0;i<hits;i++){
-      t+=rng.ri(230,270);
-      const last=i===hits-1;
-      const dmg=last?rng.ri(12,16):rng.ri(8,12);
-      add(t, {impact:1, sparking:ctx.atk}, function(s){
-       const K=sides(s,ctx.atk); const A=K.A(), D=K.D(), d=K.dir();
-       A.frame=fr.aerial; A.y=16+i*3; A.rot=(i%2?-18:16)*d; A.x=D.x-d*6;
-       K.hurt(dmg); D.y=8+i*6; D.rot=(10+i*8)*d; if(last) D.x=clampX(D.x+d*8,8,94);
-      });
-     }
-     t+=320;
-     add(t, null, function(s){ const K=sides(s,ctx.atk); const D=K.D(), d=K.dir(); D.x=clampX(D.x+d*24,-20,126); D.y=36; D.rot=70*d; D.scale=.9; });
-     t+=360; marks.ko=t;
-     add(t, {blast:koBlast(ctx.def), ko:ctx.def}, function(s){ const K=sides(s,ctx.atk); flyOff(K.D(), ctx.def); winPose(K.A(), fr); });
-     t+=420; marks.banner=t;
-     add(t, {banner:1, blast:koBlast(ctx.def), ko:ctx.def});
-     return t;
+     let t=dashTo(add, s, ctx, 0, 9, 8);
+     add(t+fdt(7), Object.assign({grab:ctx.atk, fs:0}, EZ(ctx,'snap','out')), function(s){ const K=sides(s,ctx.atk), P=K.A(), D=K.D(), d=K.dir(); P.frame=1; P.sx=1.1; P.sy=.9; D.x=clampX(P.x+d*7,12,88); D.sx=.92; D.sy=1.06; });
+     t+=fdt(7);
+     add(t+fdt(10), Object.assign({grab:ctx.atk}, EZ(ctx,'inout','inout')), function(s){ const K=sides(s,ctx.atk), P=K.A(), D=K.D(); P.frame=0; P.sx=1.12; P.sy=.86; D.x=P.x; D.y=18; D.rot=0; });
+     // up throw headbutt (hits on 14/16)
+     const kt=add(t+fdt(16), Object.assign({impact:1, thrown:ctx.def, fs:0, elec:1, hl:ctx.def}, EZ(ctx,'snap','out')), function(s){ const K=sides(s,ctx.atk), P=K.A(), D=K.D(); P.frame=4; P.sx=.9; P.sy=1.14; K.hurt(rng.ri(4,7)); D.y=40; });
+     add(t+fdt(30), EZ(ctx,'back','out'), function(s){ const K=sides(s,ctx.atk), P=K.A(), D=K.D(), d=K.dir(); P.sx=1; P.sy=1; D.y=86; D.rot=20*d; });
+     t+=fdt(30);
+     // Thunder: cloud forms over Pikachu, bolt lands on frame 13
+     marks.thunder=t;
+     add(t+fdt(6), Object.assign({cloud:{show:1,x:sides(s,ctx.atk).A().x}, sparking:ctx.atk, fs:0}, EZ(ctx,'out','inout')), function(s){ const K=sides(s,ctx.atk), P=K.A(), D=K.D(); P.frame=4; P.sx=1.08; P.sy=.92; D.y=78; });
+     const dmg=rng.ri(12,16);
+     marks.bolt=t+fdt(13); marks.fsmash=marks.bolt;
+     const xb=sides(s,ctx.atk).A().x;
+     add(t+fdt(13), Object.assign({cloud:{show:1,x:xb}, bolt:{show:1,x:xb}, impact:1, elec:1, kohit:1, hl:ctx.def, zr:{by:ctx.atk, dur:Math.round(fdt(16)*0.68)}}, EZ(ctx,'snap','snap')), function(s){
+      const K=sides(s,ctx.atk), P=K.A(), D=K.D(), d=K.dir(); K.hurt(dmg); P.sx=1.16; P.sy=.86; D.rot=16*d; D.y=70; D.sx=.88; D.sy=1.1;
+     });
+     add(t+fdt(22), Object.assign({cloud:{show:0}, bolt:{show:0}}, EZ(ctx,'out','out')), function(s){ const P=sides(s,ctx.atk).A(); P.sx=1; P.sy=1; });
+     return koLaunch(add, s, ctx, t+fdt(22), marks, 'upStay');
+    }),
+    usmash:makeSeg('def', function(s,rng,ctx,add,marks){
+     // Nair dragdown -> Up smash (works at all %): landing nair hit, then a 10f tail flip launch.
+     resetStance(s); add(0);
+     let t=dashTo(add, s, ctx, 0, 10, 6);
+     t=jumpIn(add, s, ctx, t, 20, 2);
+     const n=strike(add, s, ctx, t, {S:3, A:3, wind:'aerial', hit:'aerial', hop:20, lean:0, lunge:1, minGap:6, tilt:30, dmg:rng.ri(3,5), kb:.08, keep:true, extra:{elec:1, zr:{by:ctx.atk, dur:200}}});
+     add(n.t+fdt(5), Object.assign({dust:{by:ctx.atk}}, EZ(ctx,'in','out')), function(s){ const K=sides(s,ctx.atk), P=K.A(), D=K.D(), d=K.dir(); P.y=0; P.sx=1.16; P.sy=.84; P.frame=0; D.y=0; D.x=clampX(P.x+d*8,12,88); });
+     t=n.t+fdt(5);
+     add(t+fdt(6), Object.assign({sparking:ctx.atk}, EZ(ctx,'out','inout')), function(s){ const K=sides(s,ctx.atk), P=K.A(), d=K.dir(); P.sx=1.12; P.sy=.86; P.rot=-12*d; });
+     const r=strike(add, s, ctx, t+fdt(6), {S:4, A:3, E:0, wind:'ready', hit:'aerial', lean:0, lunge:2, minGap:6, tilt:-40, sw:ptail(200,-20,{r:38, dy:16, w:12}), dmg:rng.ri(13,15), kb:1, keep:true, extra:{elec:1, kohit:1}});
+     marks.fsmash=r.hitT;
+     return koLaunch(add, s, ctx, r.t, marks, 'upStay');
+    }),
+    fsmash:makeSeg('def', function(s,rng,ctx,add,marks){
+     // Forward smash: 15f charge, paws-forward electric burst (hits 15/17/20), last hit launches.
+     resetStance(s); add(0);
+     let t=dashTo(add, s, ctx, 0, 12, 6);
+     add(t+fdt(6), Object.assign({fs:0, sparking:ctx.atk}, EZ(ctx,'out','inout')), function(s){ const K=sides(s,ctx.atk), P=K.A(), d=K.dir(); P.frame=0; P.sx=1.14; P.sy=.84; P.rot=-8*d; P.x=clampX(P.x-d*2,12,88); });
+     add(t+fdt(24), Object.assign({sparking:ctx.atk, zr:{by:ctx.atk, dur:Math.round(fdt(18)*0.68)}}, EZ(ctx,'inout','inout')), function(s){ const K=sides(s,ctx.atk), P=K.A(); P.sx=1.16; P.sy=.82; });
+     t+=fdt(24);
+     const h1=strike(add, s, ctx, t, {S:3, A:1, wind:'ready', hit:'special', lean:0, lunge:4, minGap:9, tilt:0, dmg:rng.ri(3,5), kb:.08, keep:true, extra:{elec:1}});
+     const h2=strike(add, s, ctx, h1.t, {S:2, A:1, wind:'special', hit:'special', lean:0, lunge:0, minGap:9, tilt:0, dmg:rng.ri(3,5), kb:.08, keep:true, extra:{elec:1}});
+     const r=strike(add, s, ctx, h2.t, {S:3, A:3, E:0, wind:'special', hit:'special', lean:0, lunge:1, minGap:9, tilt:0, dmg:rng.ri(12,16), kb:1, keep:true, extra:{elec:1, kohit:1}});
+     marks.fsmash=r.hitT;
+     return koLaunch(add, s, ctx, r.t, marks, false);
     }),
     skullbash:makeSeg('def', function(s,rng,ctx,add,marks){
-     const fr=F_PIKA;
+     // Skull Bash: crouched charge (wiggling), released headfirst rocket (10f after release), recoil bounce.
      resetStance(s); add(0);
-     add(200, {sparking:ctx.atk}, function(s){ const K=sides(s,ctx.atk); K.A().frame=fr.special; K.A().x=clampX(K.A().x-K.dir()*8,16,86); });
-     add(520, {sparking:ctx.atk, qa:{x:midX(s),y:8,w:40,rot:0}}, function(s){ const K=sides(s,ctx.atk); K.A().frame=fr.attack; K.A().x=clampX(K.A().x+K.dir()*20,16,86); });
-     const dmg=rng.ri(16,22);
-     add(820, {impact:1, qa:{x:sides(s,ctx.atk).D().x,y:6,w:28,rot:0}}, function(s){
-      const K=sides(s,ctx.atk); const A=K.A(), D=K.D(), d=K.dir();
-      A.x=clampX(D.x-d*8,16,86); A.frame=fr.attack; K.hurt(dmg); D.rot=24*d; D.y=14; D.x=clampX(D.x+d*10,8,94);
-     });
-     add(1180, null, function(s){ const K=sides(s,ctx.atk); const D=K.D(), d=K.dir(); D.x=clampX(D.x+d*28,-20,126); D.y=32; D.rot=60*d; D.scale=.92; });
-     marks.ko=1520;
-     add(1520, {blast:koBlast(ctx.def), ko:ctx.def}, function(s){ const K=sides(s,ctx.atk); flyOff(K.D(), ctx.def); winPose(K.A(), fr); });
-     marks.banner=1960;
-     add(1960, {banner:1, blast:koBlast(ctx.def), ko:ctx.def});
-     return 1960;
+     add(fdt(8), Object.assign({fs:0, sparking:ctx.atk}, EZ(ctx,'out','inout')), function(s){ const K=sides(s,ctx.atk), P=K.A(), d=K.dir(); P.frame=0; P.sx=1.16; P.sy=.82; P.rot=-10*d; P.x=clampX(P.x-d*4,12,88); });
+     add(fdt(20), Object.assign({sparking:ctx.atk}, EZ(ctx,'inout','inout')), function(s){ const K=sides(s,ctx.atk), P=K.A(), d=K.dir(); P.rot=-4*d; P.sx=1.2; P.sy=.8; });
+     add(fdt(32), Object.assign({sparking:ctx.atk}, EZ(ctx,'inout','inout')), function(s){ const K=sides(s,ctx.atk), P=K.A(), d=K.dir(); P.rot=-12*d; P.sx=1.18; P.sy=.82; });
+     const p0=Object.assign({}, sides(s,ctx.atk).A());
+     const r=strike(add, s, ctx, fdt(32), {S:10, A:3, E:0, wind:'attack', hit:'attack', lean:-6, lunge:30, minGap:7, tilt:-14, dmg:rng.ri(16,21), kb:1, keep:true, extra:{elec:1, kohit:1, afterimage:ctx.atk}});
+     r.key.zip={x0:p0.x, y0:16, x1:r.key[atkKey(ctx)].x, y1:16};
+     marks.fsmash=r.hitT;
+     // recoil hop back off the foe
+     add(r.t+fdt(6), EZ(ctx,'out','out'), function(s){ const K=sides(s,ctx.atk), P=K.A(), d=K.dir(); P.x=clampX(P.x-d*8,12,88); P.y=22; P.rot=-30*d; P.frame=2; });
+     add(r.t+fdt(14), Object.assign({dust:{by:ctx.atk}}, EZ(ctx,'in','out')), function(s){ const K=sides(s,ctx.atk), P=K.A(); P.y=0; P.rot=0; P.frame=0; P.sx=1.12; P.sy=.88; });
+     return koLaunch(add, s, ctx, r.t+fdt(14), marks, false);
+    }),
+    aerial:makeSeg('def', function(s,rng,ctx,add,marks){
+     // Down air: full hop over the foe, 14f headfirst screw, clean hit is a meteor straight down.
+     resetStance(s); add(0);
+     let t=dashTo(add, s, ctx, 0, 14, 6);
+     t=jumpIn(add, s, ctx, t, 30, 8);
+     add(t+fdt(8), EZ(ctx,'out','inout'), function(s){ const K=sides(s,ctx.atk), P=K.A(), D=K.D(), d=K.dir(); P.y=62; P.x=clampX(D.x-d*2,12,88); P.frame=2; P.rot=180*d; P.sx=.92; P.sy=1.08; });
+     t+=fdt(8);
+     const r=strike(add, s, ctx, t, {S:6, A:2, E:0, wind:'aerial', hit:'aerial', hop:34, lean:0, lunge:0, minGap:0, tilt:-180, dmg:rng.ri(12,14), kb:1, keep:true, extra:{elec:1, kohit:1, zr:{by:ctx.atk, dur:Math.round(fdt(10)*0.68)}}});
+     marks.fsmash=r.hitT;
+     add(r.t+fdt(8), Object.assign({dust:{by:ctx.atk}}, EZ(ctx,'in','in')), function(s){ const K=sides(s,ctx.atk), P=K.A(); P.y=0; P.rot=0; P.frame=0; P.sx=1.14; P.sy=.86; });
+     return koLaunch(add, s, ctx, r.t+fdt(8), marks, 'down');
     })
    }
   };
@@ -2003,7 +2085,7 @@ const fxCtx=(fxCanvas && fxCanvas.getContext)?fxCanvas.getContext('2d'):null;
       const K=sides(s,ctx.atk); const d=K.dir();
       K.A().frame=f.attack; K.A().rot=-12*d;
       K.hurt(dmgRoll);
-      K.D().x=clampX(K.D().x+d*18,8,94);
+      K.D().x=clampX(K.D().x+d*18,HUD_SAFE_L,HUD_SAFE_R);
       K.D().y=22; K.D().rot=55*d; K.D().scale=.9;
      });
      add(920, null, function(s){ resetStance(s); });
@@ -2483,6 +2565,64 @@ function drawDust(g, P, age){
  }
  g.restore();
 }
+function fxHash(n){ const x=Math.sin(n*12.9898+78.233)*43758.5453; return x-Math.floor(x); }
+function zigLine(g, x0, y0, x1, y1, n, amp, seed){
+ const dx=x1-x0, dy=y1-y0, len=Math.hypot(dx,dy)||1, nx=-dy/len, ny=dx/len;
+ g.beginPath(); g.moveTo(x0,y0);
+ for(let i=1;i<n;i++){ const f=i/n, o=(fxHash(seed*31+i)-0.5)*2*amp; g.lineTo(x0+dx*f+nx*o, y0+dy*f+ny*o); }
+ g.lineTo(x1,y1); g.stroke();
+}
+function elecStroke(g, alpha, fn){
+ g.save(); g.globalCompositeOperation='lighter'; g.lineJoin='round'; g.lineCap='round';
+ g.globalAlpha=alpha*0.7; g.strokeStyle='#ffd21f'; g.lineWidth=3.2; g.shadowColor='#ffe94a'; g.shadowBlur=10; fn(0);
+ g.globalAlpha=alpha; g.strokeStyle='#ffffff'; g.lineWidth=1.2; g.shadowBlur=0; fn(1);
+ g.restore();
+}
+function bodyC(P){ return [(P.x/100)*FX_W, FX_GROUND-(P.y||0)-20]; }
+function drawZapBurst(g, P, age, dmg, ko){
+ const p=age/260; if(p>1) return;
+ const c=bodyC(P), seed=Math.floor(age/40)+Math.round(P.x*7);
+ const big=Math.min(1,(+dmg||0)/35)+(ko?0.6:0);
+ const rays=5+Math.round(big*5);
+ if(age<70){ g.save(); g.globalCompositeOperation='lighter'; g.globalAlpha=0.55*(1-age/70); const gr=g.createRadialGradient(c[0],c[1],0,c[0],c[1],14+16*big); gr.addColorStop(0,'#ffffff'); gr.addColorStop(0.5,'#ffe94a'); gr.addColorStop(1,'rgba(255,210,0,0)'); g.fillStyle=gr; g.beginPath(); g.arc(c[0],c[1],14+16*big,0,Math.PI*2); g.fill(); g.restore(); }
+ elecStroke(g, 1-p, function(){
+  for(let i=0;i<rays;i++){ const a=(i/rays)*Math.PI*2+fxHash(seed+i)*0.6, L=(8+20*p+fxHash(seed+i*3)*8)*(0.8+0.8*big);
+   zigLine(g, c[0]+Math.cos(a)*5, c[1]+Math.sin(a)*5, c[0]+Math.cos(a)*L, c[1]+Math.sin(a)*L, 4, 3, seed+i); }
+ });
+}
+function drawBoltFx(g, xPct, D, age){
+ // Jagged canvas bolt layered over the CSS bolt: sky -> through the juggled foe -> Pikachu's head.
+ const p=age/380, x=(xPct/100)*FX_W, seed=Math.floor(age/50);
+ elecStroke(g, 1-p*p, function(){ zigLine(g, x+3, 0, x, FX_GROUND-26, 10, 7, seed); zigLine(g, x-4, 10, x+2, FX_GROUND-30, 8, 5, seed+17); });
+ if(age<110){ g.save(); g.globalCompositeOperation='lighter'; g.globalAlpha=0.35*(1-age/110); g.fillStyle='#fff6c0'; g.fillRect(0,0,FX_W,FX_H); g.restore(); }
+}
+function drawZapRing(g, P, age, dur){
+ if(age>dur) return;
+ const c=bodyC(P), seed=Math.floor(age/45);
+ const fade=Math.min(1,(dur-age)/80);
+ elecStroke(g, 0.9*fade, function(){
+  for(let i=0;i<5;i++){ const a0=fxHash(seed*5+i)*Math.PI*2, a1=a0+0.9+fxHash(seed+i)*0.8, R=19+fxHash(seed*9+i)*5;
+   zigLine(g, c[0]+Math.cos(a0)*R, c[1]+Math.sin(a0)*R*0.9, c[0]+Math.cos(a1)*R, c[1]+Math.sin(a1)*R*0.9, 5, 3, seed*7+i); }
+ });
+}
+function drawBall(g, b, age){
+ if(age>b.dur) return;
+ const f=age/b.dur, xPct=b.x0+(b.x1-b.x0)*f;
+ const hop=Math.abs(Math.sin(f*Math.PI*(b.hops||2)));
+ const x=(xPct/100)*FX_W, y=FX_GROUND-6-hop*14;
+ g.save(); g.globalCompositeOperation='lighter';
+ const grd=g.createRadialGradient(x,y,0,x,y,11);
+ grd.addColorStop(0,'#ffffff'); grd.addColorStop(0.35,'#ffe94a'); grd.addColorStop(1,'rgba(255,200,0,0)');
+ g.fillStyle=grd; g.beginPath(); g.arc(x,y,11,0,Math.PI*2); g.fill();
+ g.restore();
+ const seed=Math.floor(age/40);
+ elecStroke(g, 0.9, function(){ for(let i=0;i<3;i++){ const a=fxHash(seed+i*5)*Math.PI*2; zigLine(g, x, y, x+Math.cos(a)*12, y+Math.sin(a)*12, 3, 2, seed+i); } });
+}
+function drawZip(g, z, age){
+ const p=age/220; if(p>1) return;
+ const x0=(z.x0/100)*FX_W, y0=FX_GROUND-z.y0, x1=(z.x1/100)*FX_W, y1=FX_GROUND-z.y1;
+ elecStroke(g, 1-p, function(){ zigLine(g, x0, y0, x1, y1, 7, 4, Math.floor(age/40)+3); zigLine(g, x0, y0+4, x1, y1+4, 6, 3, Math.floor(age/40)+9); });
+}
 function drawFx(keys, now, r, m){
  if(!fxCtx) return;
  const g=fxCtx;
@@ -2495,6 +2635,15 @@ function drawFx(keys, now, r, m){
   const age=now-k.t;
   if(k.sw && age<(k.sw.dur||120)+260) drawSwipe(g, k.sw.by==='morty'?m:r, k.sw, age);
   if(k.dust && age<360) drawDust(g, k.dust.by==='morty'?m:r, age);
+  if(k.zr && age<k.zr.dur) drawZapRing(g, k.zr.by==='morty'?m:r, age, k.zr.dur);
+  if(k.elec && k.impact && age<260){
+   const pk=i>0?keys[i-1]:null;
+   const hd=pk?Math.max(0,(k.rp||0)-(pk.rp||0),(k.mp||0)-(pk.mp||0)):0;
+   drawZapBurst(g, k.hl==='morty'?m:r, age, hd, !!k.kohit);
+  }
+  if(k.bolt && k.bolt.show && age<380) drawBoltFx(g, k.bolt.x, (k.hl==='morty'?m:r), age);
+  if(k.ball && age<k.ball.dur) drawBall(g, k.ball, age);
+  if(k.zip && age<220) drawZip(g, k.zip, age);
  }
 }
 function applyAt(outcome, now, impactsOk){
@@ -2627,7 +2776,7 @@ function applyAt(outcome, now, impactsOk){
      const flash=inFin && (!outcome.koTagged || !!k.kohit);
      if(k.impact) juice(dmg, flash);
      if(k.hl){
-      freezeLeft=Math.max(freezeLeft, hitlagMs(dmg, !!k.kohit));
+      freezeLeft=Math.max(freezeLeft, hitlagMs(dmg, !!k.kohit)*(k.elec?1.5:1));
       freezeSide=k.hl; freezeAmp=1+Math.min(3.5, dmg/9)+(k.kohit?2:0);
      }
     }
