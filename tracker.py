@@ -377,7 +377,19 @@ PAGE = r"""
  .fighter{position:absolute;width:0;height:0;z-index:3;pointer-events:none}
  .fighter-art{position:absolute;left:0;bottom:0;background-repeat:no-repeat;image-rendering:pixelated;image-rendering:crisp-edges;transform-origin:var(--ax) var(--ay)}
  .fighter.sparking .fighter-art{filter:drop-shadow(0 0 6px #ffe56a) drop-shadow(0 0 12px #39f)}
-.fighter.countering .fighter-art{filter:drop-shadow(0 0 8px #e8f0ff) drop-shadow(0 0 16px #8bf)}
+ .fighter.countering .fighter-art{filter:drop-shadow(0 0 8px #e8f0ff) drop-shadow(0 0 16px #8bf)}
+ .shield-bubble{position:absolute;left:0;bottom:8px;width:72px;height:72px;margin-left:-36px;border-radius:50%;border:2.5px solid rgba(160,220,255,.95);background:radial-gradient(circle at 40% 35%,rgba(220,245,255,.35),rgba(80,170,255,.22) 55%,rgba(40,120,220,.08));box-shadow:0 0 12px rgba(120,200,255,.8),inset 0 0 10px rgba(200,240,255,.55);opacity:0;pointer-events:none;z-index:4;transform:scale(.7);transform-origin:50% 70%}
+ .fighter.shielding .shield-bubble{opacity:1;animation:shieldhold .75s ease-out forwards}
+ @keyframes shieldhold{0%{transform:scale(.86);opacity:.4}22%{transform:scale(1.08);opacity:1}100%{transform:scale(.8);opacity:.82}}
+ .fighter.shield-pop .shield-bubble{opacity:1;animation:shieldpop .28s ease-out forwards}
+ @keyframes shieldpop{0%{transform:scale(.82);opacity:.95}35%{transform:scale(1.28);opacity:.65}100%{transform:scale(1.7);opacity:0}}
+ .shield-spark{position:absolute;width:18px;height:18px;margin-left:-9px;border-radius:50%;background:radial-gradient(circle,#fff 0%,#b8e4ff 42%,transparent 72%);box-shadow:0 0 10px #c4f0ff;opacity:0;pointer-events:none;z-index:5}
+ .shield-spark.show{opacity:1;animation:blockspark .28s ease-out}
+ @keyframes blockspark{0%{transform:scale(.35);opacity:1}100%{transform:scale(1.85);opacity:0}}
+ .fighter.dodging .fighter-art{filter:drop-shadow(0 0 5px #fff)}
+ .fighter.grabbing .fighter-art{filter:drop-shadow(0 0 6px #ffe9a3)}
+ .fighter.thrown .fighter-art{animation:tosspin .38s ease-out}
+ @keyframes tosspin{0%{filter:drop-shadow(0 0 0 transparent)}40%{filter:drop-shadow(0 6px 8px rgba(0,0,0,.45))}100%{filter:drop-shadow(0 0 0 transparent)}}
  .fighter.ghost{opacity:.4;z-index:2}
  .ko-mark{position:absolute;z-index:6;font-weight:900;letter-spacing:.14em;color:#ff4a4a;font-size:18px;text-shadow:2px 2px 0 #000;opacity:0;pointer-events:none}
  .ko-mark.show{opacity:1;animation:calloutpop .3s ease-out}
@@ -416,7 +428,7 @@ PAGE = r"""
  @keyframes bannerpop{from{transform:scale(.6);opacity:0}to{transform:scale(1);opacity:1}}
  .fight-replay{display:block;margin:2.3cqi auto 0;padding:2cqi 3.5cqi;border-radius:999px;border:1px solid #e8c56b;background:#2a3240;color:#ffe9a3;font-weight:700;font-size:clamp(12px,2.7cqi,14px);cursor:pointer}
  @media (prefers-reduced-motion:reduce){
-   .fight-stage.shake,.fight-stage.flash .fight-flash,.fight-banner,.move-callout,.ko-mark,.blade-trail,.tipper-spark,.dolphin-arc,.qa-streak,.blast,.p-pct.pop{animation:none!important}
+   .fight-stage.shake,.fight-stage.flash .fight-flash,.fight-banner,.move-callout,.ko-mark,.blade-trail,.tipper-spark,.dolphin-arc,.qa-streak,.blast,.p-pct.pop,.fighter.shielding .shield-bubble,.fighter.shield-pop .shield-bubble,.fighter.thrown .fighter-art,.shield-spark.show{animation:none!important}
    .sprite{animation:none!important}
  }
  @keyframes idle{from{background-position:0 0}to{background-position:calc(-1 * var(--sheet-w)) 0}}
@@ -465,11 +477,12 @@ PAGE = r"""
   <div class="fight-toolbar"><button type="button" class="fight-close" aria-label="Close">&times;</button></div>
   <div class="fight-stage">
    <div class="fight-world">
-   <div class="fighter roman"><div class="fighter-art"></div></div>
-   <div class="fighter morty"><div class="fighter-art"></div></div>
+   <div class="fighter roman"><div class="shield-bubble"></div><div class="fighter-art"></div></div>
+   <div class="fighter morty"><div class="shield-bubble"></div><div class="fighter-art"></div></div>
    <div class="blade-trail"></div>
    <div class="dolphin-arc"></div>
    <div class="tipper-spark"></div>
+   <div class="shield-spark"></div>
    <div class="qa-streak"></div>
    <div class="fx-cloud"></div>
    <div class="fx-bolt"><div class="bolt-core"></div></div>
@@ -643,6 +656,7 @@ const FIGHT = __FIGHT__;
  const trail=overlay.querySelector('.blade-trail');
  const arc=overlay.querySelector('.dolphin-arc');
  const spark=overlay.querySelector('.tipper-spark');
+ const shieldSpark=overlay.querySelector('.shield-spark');
  const qa=overlay.querySelector('.qa-streak');
  const blast=overlay.querySelector('.blast');
  const romanEl=overlay.querySelector('.fighter.roman');
@@ -726,7 +740,12 @@ const FIGHT = __FIGHT__;
    chance:function(p){ return this.next()<p; }
   };
  }
- function copySt(st){ return {r:Object.assign({},st.r), m:Object.assign({},st.m), rp:st.rp, mp:st.mp}; }
+ function copySt(st){
+  const o={r:Object.assign({},st.r), m:Object.assign({},st.m), rp:st.rp, mp:st.mp};
+  o._defend=st._defend; o._shieldDmg=st._shieldDmg; o._hitDmg=st._hitDmg;
+  o._hitApplied=st._hitApplied; o._finisherMove=st._finisherMove;
+  return o;
+ }
  function faceSt(st){
   if(st.r.x<=st.m.x){ st.r.face=1; st.m.face=-1; }
   else { st.r.face=-1; st.m.face=1; }
@@ -756,7 +775,7 @@ const FIGHT = __FIGHT__;
    const s=copySt(st);
    function add(t, extra, mut){ if(mut) mut(s); const k=snap(s, extra); k.t=t; keys.push(k); return k; }
    const duration=fn(s, rng, ctx, add, marks);
-   const scale=0.8;
+   const scale=0.68;
    keys.forEach(function(k){ k.t=Math.round(k.t*scale); });
    Object.keys(marks).forEach(function(k){ marks[k]=Math.round((marks[k]||0)*scale); });
    return {keys:keys, duration:Math.round(duration*scale), st:s, marks:marks};
@@ -764,15 +783,17 @@ const FIGHT = __FIGHT__;
  }
 
   /* Random-roster engine. Each cat independently draws a fighter they have a sheet for.
-     Mirror matches are allowed. Marth is Roman-only and Pikachu is Morty-only (original sheets).
+     Mirror matches are allowed. Both cats can roll all eight fighters, including Marth and Pikachu.
      RULES:
-     - No draws. Winner is chosen first so every fight is decisive; split is ~even over time.
+     - No draws. The winner is whoever lands the KO; a failsafe cap guarantees one.
+     - Fights trade back and forth. Consecutive attacks by one side are capped at 3.
+     - Regular hits deal a random 1–35. Shields take 0–3; dodges take 0.
+     - A KO becomes possible at 120%+, with odds climbing toward ~200% and guaranteed by 220%.
      - No move-name labels. Only the % HUD, fighter names, and the winner banner.
      - Thunder (Pikachu down-B) only ever increments the DEFENDER's %. Never the user.
        Thunder is a ranged sky bolt, so Marth Counter is never used against it.
      - Counter (Marth down-B) is Marth-only and only fires against a close-range MELEE
-       hit that reaches Marth's body. It is a standing sword swing, not a reflector.
-     - A KO only comes from a finisher after damage has already been built. Never a raw hit at 0%. */
+       hit that reaches Marth's body. It is a standing sword swing, not a reflector. */
 
   const F5={ready:0,attack:1,aerial:2,special:3,victory:4};
   const F_MARTH={ready:0,attack:2,aerial:1,special:2,victory:3};
@@ -801,9 +822,44 @@ const FIGHT = __FIGHT__;
     atk:atk, def:def,
     A:function(){ return pose(s, atk); },
     D:function(){ return pose(s, def); },
-    hurt:function(n){ addDmg(s, def, n); },
+    hurt:function(n){
+     let dmg=n;
+     if(s._defend==='dodge' || s._defend==='shield') dmg=0;
+     else if(s._hitDmg!=null && !s._finisherMove){
+      if(!s._hitApplied){ dmg=s._hitDmg; s._hitApplied=1; }
+      else dmg=0;
+     }
+     if(dmg>0) addDmg(s, def, dmg);
+    },
     dir:function(){ const A=this.A(), D=this.D(); return A.x<=D.x?1:-1; }
    };
+  }
+  const KO_MIN=120, KO_SURE=200, KO_CAP=220;
+  function koChance(pct){
+   if(pct<KO_MIN) return 0;
+   if(pct>=KO_CAP) return 1;
+   if(pct>=KO_SURE) return 0.88+0.12*(pct-KO_SURE)/(KO_CAP-KO_SURE);
+   return 0.08+0.80*(pct-KO_MIN)/(KO_SURE-KO_MIN);
+  }
+  function decorateDefense(seg, defend, defSide){
+   if(!defend || !seg || !seg.keys) return;
+   const times=[];
+   seg.keys.forEach(function(k){ if(k.impact) times.push(k.t); });
+   const t0=times.length?Math.min.apply(null,times)-80:0;
+   const t1=times.length?Math.max.apply(null,times)+200:(seg.duration||0);
+   seg.keys.forEach(function(k){
+    if(k.t>=t0 && k.t<=t1){
+     if(defend==='shield') k.shield=defSide;
+     if(defend==='dodge') k.dodge=defSide;
+    }
+    if(k.impact){
+     const P=defSide==='roman'?k.r:k.m;
+     if(!P) return;
+     const face=P.face||(defSide==='roman'?1:-1);
+     if(defend==='dodge'){ P.y=8; P.rot=face*-40; P.x=clampX(P.x-face*14,8,94); P.scale=.92; }
+     else if(defend==='shield'){ P.y=0; P.rot=face*4; P.x=clampX(P.x+face*4,12,90); P.scale=1; k.blockSpark={x:P.x,y:22}; }
+    }
+   });
   }
   function frOf(ctx, who){
    const id=who==='atk'?ctx.atkId:ctx.defId;
@@ -1645,15 +1701,8 @@ const FIGHT = __FIGHT__;
    if(!romanId || romanPool.indexOf(romanId)<0) romanId=rng.pick(romanPool);
    if(!mortyId || mortyPool.indexOf(mortyId)<0) mortyId=rng.pick(mortyPool);
 
-   let winner=opts.winner;
-   if(winner!=='roman' && winner!=='morty') winner=rng.chance(0.5)?'roman':'morty';
-   const loser=winner==='roman'?'morty':'roman';
-   const winId=winner==='roman'?romanId:mortyId;
-   const loseId=loser==='roman'?romanId:mortyId;
-
-   let finisher=opts.finisher;
-   const finIds=kitMoveIds(winId, 'finishers');
-   if(!finisher || finIds.indexOf(finisher)<0) finisher=rng.pick(finIds);
+   const forcedWinner=(opts.winner==='roman'||opts.winner==='morty')?opts.winner:null;
+   let winner=null;
 
    function pickOpening(){
     if(opts.opening){
@@ -1667,42 +1716,12 @@ const FIGHT = __FIGHT__;
    }
    const opening=pickOpening();
 
-   let nMids=opts.nMids;
-   if(!(nMids>=2 && nMids<=4)) nMids=rng.ri(2,4);
-   const heavy=(KITS[winId] && KITS[winId].heavy) || [];
-
-   function pickMid(avoid){
-    const useWinner=rng.chance(0.7);
-    const atk=useWinner?winner:loser;
-    const atkId=atk==='roman'?romanId:mortyId;
-    let ids=kitMoveIds(atkId,'mids').filter(function(id){ return id!==avoid; });
-    if(!ids.length) ids=kitMoveIds(atkId,'mids');
-    if(useWinner && heavy.length && rng.chance(0.45)){
-     const h=heavy.filter(function(id){ return ids.indexOf(id)>=0 && id!==avoid; });
-     if(h.length) ids=h;
-    }
-    const id=rng.pick(ids);
-    return {id:id, atk:atk, atkId:atkId, defId:atk==='roman'?mortyId:romanId};
-   }
-   const midPicks=[];
-   let last=null;
-   for(let i=0;i<nMids;i++){
-    const p=pickMid(last);
-    midPicks.push(p);
-    last=p.id;
-   }
-   if(heavy.length && !midPicks.some(function(p){ return p.atk===winner && heavy.indexOf(p.id)>=0; })){
-    const hid=rng.pick(heavy);
-    if(kitMove(winId,'mids',hid)){
-     midPicks[midPicks.length-1]={id:hid, atk:winner, atkId:winId, defId:loseId};
-    }
-   }
-
    const out={
     keys:[], marks:{},
-    opening:opening.id, mids:midPicks.map(function(p){ return p.id; }),
-    finisher:finisher, winner:winner, seed:seed,
+    opening:opening.id, mids:[],
+    finisher:null, winner:null, seed:seed,
     romanFighter:romanId, mortyFighter:mortyId,
+    exchanges:[], hitDmgs:[], koPct:null, grabs:0, grabsThrough:0, throws:0,
     cast:{
      roman:{id:romanId, name:fighterName(romanId), meta:fighterMeta('roman', romanId)},
      morty:{id:mortyId, name:fighterName(mortyId), meta:fighterMeta('morty', mortyId)}
@@ -1710,44 +1729,268 @@ const FIGHT = __FIGHT__;
    };
    let st=freshState();
    let t=0;
-   function runBound(pool, pick){
+   function runBound(pool, pick, defend){
     const item=kitMove(pick.atkId, pool, pick.id);
-    if(!item) return;
+    if(!item) return {dmg:0, rp:st.rp, mp:st.mp};
+    const isFin=pool==='finishers';
+    st._defend=(!isFin && defend)||null;
+    st._shieldDmg=0;
+    st._hitDmg=isFin?null:rng.ri(1,35);
+    st._hitApplied=0;
+    st._finisherMove=!!isFin;
+    const rp0=st.rp, mp0=st.mp;
     const seg=item.run(st, rng, {winner:winner, id:pick.id, atk:pick.atk, def:otherSide(pick.atk), atkId:pick.atkId, defId:pick.defId});
+    decorateDefense(seg, st._defend, otherSide(pick.atk));
     t=append(out, seg, t);
     st=seg.st;
+    st._defend=null; st._shieldDmg=null; st._hitDmg=null; st._hitApplied=0; st._finisherMove=false;
+    const dmg=pick.atk==='roman'?(st.mp-mp0):(st.rp-rp0);
+    return {dmg:dmg, rp:st.rp, mp:st.mp};
    }
-   runBound('openings', opening);
-   midPicks.forEach(function(p){ runBound('mids', p); });
+   function runGrabThrow(grabber, kind){
+    kind=kind||'standing';
+    const grabId=grabber==='roman'?romanId:mortyId;
+    const victim=otherSide(grabber);
+    const dmgRoll=rng.ri(1,35);
+    const item=makeSeg('def', function(s,rng,ctx,add,marks){
+     const f=frOf(ctx,'atk');
+     resetStance(s);
+     if(kind==='through'){
+      add(0, {shield:ctx.def});
+      add(140, {shieldPop:ctx.def, grab:ctx.atk}, function(s){
+       const K=sides(s,ctx.atk); const d=K.dir();
+       K.A().frame=f.attack; K.A().x=clampX(K.D().x-d*12,16,86);
+      });
+     } else if(kind==='oos'){
+      add(0, {shield:ctx.atk});
+      add(120, {grab:ctx.atk}, function(s){
+       const K=sides(s,ctx.atk); const d=K.dir();
+       K.A().frame=f.attack; K.A().x=clampX(K.D().x-d*10,16,86);
+      });
+     } else {
+      add(0);
+      add(120, {grab:ctx.atk}, function(s){
+       const K=sides(s,ctx.atk); const d=K.dir();
+       K.A().frame=f.attack; K.A().x=clampX(K.D().x-d*10,16,86);
+      });
+     }
+     add(340, {grab:ctx.atk}, function(s){
+      const K=sides(s,ctx.atk); const d=K.dir();
+      K.A().frame=f.special||f.attack;
+      K.A().x=clampX(K.D().x-d*8,16,86);
+      K.D().x=clampX(K.A().x+d*7,12,90);
+      K.D().y=6; K.D().rot=8*d; K.D().scale=.96;
+     });
+     add(600, {impact:1, grab:ctx.atk, thrown:ctx.def}, function(s){
+      const K=sides(s,ctx.atk); const d=K.dir();
+      K.A().frame=f.attack; K.A().rot=-12*d;
+      K.hurt(dmgRoll);
+      K.D().x=clampX(K.D().x+d*18,8,94);
+      K.D().y=22; K.D().rot=55*d; K.D().scale=.9;
+     });
+     add(920, null, function(s){ resetStance(s); });
+     return 1040;
+    });
+    st._defend=null; st._hitDmg=dmgRoll; st._hitApplied=0; st._finisherMove=false;
+    const rp0=st.rp, mp0=st.mp;
+    const seg=item.run(st, rng, {atk:grabber, def:victim, atkId:grabId, defId:grabber==='roman'?mortyId:romanId});
+    t=append(out, seg, t);
+    st=seg.st;
+    st._defend=null; st._hitDmg=null; st._hitApplied=0; st._finisherMove=false;
+    const dmg=grabber==='roman'?(st.mp-mp0):(st.rp-rp0);
+    return {dmg:dmg, rp:st.rp, mp:st.mp, throughShield:kind==='through', threw:dmg>0, kind:kind};
+   }
 
-   const MIN_PCT=120;
-   function loserPct(){ return loser==='morty'?st.mp:st.rp; }
-   let pads=0;
-   while(loserPct()<MIN_PCT && pads<12 && heavy.length){
-    const hid=rng.pick(heavy);
-    if(kitMove(winId,'mids',hid)){
-     const p={id:hid, atk:winner, atkId:winId, defId:loseId};
-     midPicks.push(p);
-     out.mids.push(hid);
-     runBound('mids', p);
+   let lastAtk=null, streak=0, leadChanges=0, lastLead=null;
+   function noteLead(){
+    const lead=st.rp===st.mp?null:(st.rp>st.mp?'roman':'morty');
+    if(lead && lastLead && lead!==lastLead) leadChanges++;
+    if(lead) lastLead=lead;
+   }
+   function record(pick, defend, res, pool){
+    const ex={atk:pick.atk, id:pick.id, defend:defend||null, dmg:res.dmg, rp:res.rp, mp:res.mp, pool:pool, throughShield:!!(res&&res.throughShield), threw:!!(res&&res.threw)};
+    out.exchanges.push(ex);
+    if(res.dmg>0 && pool!=='finishers' && (pool==='grab' || !defend)) out.hitDmgs.push(res.dmg);
+    if(pool==='grab') out.grabs=(out.grabs||0)+1;
+    if(res && res.throughShield) out.grabsThrough=(out.grabsThrough||0)+1;
+    if(res && res.threw) out.throws=(out.throws||0)+1;
+    if(pick.atk===lastAtk) streak++;
+    else { lastAtk=pick.atk; streak=1; }
+    if(pool==='mids'){ out.mids.push(pick.id); }
+    noteLead();
+    return ex;
+   }
+   function pickAtk(){
+    if(!lastAtk) return rng.chance(0.5)?'roman':'morty';
+    if(streak>=3) return otherSide(lastAtk);
+    // Open with a clean trade so the lead can actually change hands.
+    if(out.exchanges.length<4) return otherSide(lastAtk);
+    if(leadChanges===0){
+     const behind=st.rp===st.mp?otherSide(lastAtk):(st.rp>st.mp?'roman':'morty');
+     return (behind===lastAtk && streak>=3)?otherSide(behind):behind;
     }
-    pads++;
+    if(streak>=2 && rng.chance(0.7)) return otherSide(lastAtk);
+    const atk=rng.chance(0.55)?otherSide(lastAtk):lastAtk;
+    return (atk===lastAtk && streak>=3)?otherSide(atk):atk;
    }
-   if(loserPct()<MIN_PCT){
-    const bump=MIN_PCT+((typeof rng.ri==='function')?rng.ri(0,10):6);
-    if(loser==='morty') st.mp=Math.max(st.mp, bump);
-    else st.rp=Math.max(st.rp, bump);
-    const bumpKey=snap(st,{impact:1});
-    bumpKey.t=t;
-    t+=180;
-    out.keys.push(bumpKey);
+   function maybeDefend(atk){
+    if(out.exchanges.length<1) return rng.chance(0.14)?'shield':null;
+    if(!rng.chance(0.30)) return null;
+    return rng.chance(0.58)?'shield':'dodge';
+   }
+   function markKO(atk){
+    ko=true;
+    winner=atk;
+    out.koPct=otherSide(atk)==='roman'?st.rp:st.mp;
+   }
+   function doGrab(grabber, kind, turns, minMids){
+    const grabId=grabber==='roman'?romanId:mortyId;
+    const res=runGrabThrow(grabber, kind);
+    const pick={id:kind==='oos'?'oos-grab':(kind==='through'?'grab-shield':'grab'), atk:grabber, atkId:grabId, defId:grabber==='roman'?mortyId:romanId};
+    record(pick, kind==='through'?'shield':null, res, 'grab');
+    if(canKO(grabber, res.dmg, Math.max(turns, minMids), minMids)){ markKO(grabber); return true; }
+    return false;
+   }
+   function tryShieldGrab(defend, afterAtk, turns, minMids){
+    if(defend!=='shield' || ko) return false;
+    if(!rng.chance(0.55)) return false;
+    return doGrab(otherSide(afterAtk), 'oos', turns, minMids);
+   }
+   function canKO(atk, dmg, turns, minMids){
+    if(!(dmg>0)) return false;
+    const def=otherSide(atk);
+    const pct=def==='roman'?st.rp:st.mp;
+    if(pct<KO_MIN) return false;
+    if(forcedWinner && atk!==forcedWinner) return false;
+    if(turns<minMids && pct<KO_CAP) return false;
+    // Give the lead a chance to change hands before an early lucky KO.
+    if(leadChanges<1 && pct<KO_CAP) return false;
+    return rng.next()<koChance(pct);
+   }
+   function midPick(atk){
+    const atkId=atk==='roman'?romanId:mortyId;
+    const defId=atk==='roman'?mortyId:romanId;
+    const ids=kitMoveIds(atkId,'mids');
+    return {id:rng.pick(ids), atk:atk, atkId:atkId, defId:defId};
    }
 
+   const minMids=(opts.nMids>=1)?opts.nMids:2;
+   const MAX_TURNS=28;
+   let turns=0, ko=false;
+
+   function resolveExchange(pick, pool, turns, minMids, force){
+    let defend=force&&force.defend!==undefined?force.defend:maybeDefend(pick.atk);
+    let offense=force&&force.offense?force.offense:'attack';
+    if(!force){
+     if(defend==='shield' && rng.chance(0.5)) offense='grab';
+     else if(rng.chance(0.16)) offense='grab';
+    }
+    if(offense==='grab'){
+     if(defend==='dodge'){
+      // Grab whiffs a dodge.
+      const grabId=pick.atk==='roman'?romanId:mortyId;
+      record({id:'grab-whiff', atk:pick.atk, atkId:grabId, defId:pick.atk==='roman'?mortyId:romanId}, 'dodge', {dmg:0, rp:st.rp, mp:st.mp, threw:false}, 'grab');
+      return;
+     }
+     if(defend==='shield'){
+      doGrab(pick.atk, 'through', turns, minMids);
+      return;
+     }
+     // Standing opponent: attacks beat grabs some of the time,
+     // unless the other cat just landed a 3-hit string (let the grab break it).
+     const counterAtk=otherSide(pick.atk);
+     if(rng.chance(0.32) && !(lastAtk===counterAtk && streak>=3)){
+      out.grabs=(out.grabs||0)+1;
+      const counter=midPick(counterAtk);
+      const res=runBound('mids', counter, null);
+      record(counter, null, res, 'mids');
+      if(canKO(counter.atk, res.dmg, turns, minMids)) markKO(counter.atk);
+      return;
+     }
+     doGrab(pick.atk, 'standing', turns, minMids);
+     return;
+    }
+    const res=runBound(pool, pick, defend);
+    record(pick, defend, res, pool);
+    if(canKO(pick.atk, res.dmg, turns, minMids)) markKO(pick.atk);
+    else tryShieldGrab(defend, pick.atk, turns, minMids);
+   }
+
+   resolveExchange(opening, 'openings', turns, minMids, null);
+
+   while(!ko && turns<MAX_TURNS){
+    let atk=pickAtk();
+    if(lastAtk && streak>=3) atk=otherSide(lastAtk);
+    let force=null;
+    // If the lead still hasn't flipped, the trailer grabs a shielding lead — the triangle's punish.
+    if(leadChanges===0 && out.exchanges.length>=4){
+     const behind=st.rp===st.mp?otherSide(lastAtk):(st.rp>st.mp?'roman':'morty');
+     if(!(behind===lastAtk && streak>=3)){
+      atk=behind;
+      force={offense:'grab', defend:'shield'};
+     }
+    }
+    const pick=midPick(atk);
+    turns++;
+    resolveExchange(pick, 'mids', turns, minMids, force);
+    if(!ko && leadChanges===0 && force && streak<3){
+     // One more clean hit if the throw wasn't enough to take the lead.
+     const extra=midPick(atk);
+     const res=runBound('mids', extra, null);
+     record(extra, null, res, 'mids');
+     turns++;
+     if(canKO(atk, res.dmg, turns, minMids)) markKO(atk);
+    }
+   }
+
+   if(!ko){
+    // Failsafe: keep trading until someone in range is KO'd, then force it.
+    for(let i=0;i<8 && !ko;i++){
+     const pick=midPick(pickAtk());
+     const res=runBound('mids', pick, null);
+     record(pick, null, res, 'mids');
+     turns++;
+     const def=otherSide(pick.atk);
+     const pct=def==='roman'?st.rp:st.mp;
+     const allowed=!forcedWinner || pick.atk===forcedWinner;
+     if(allowed && pct>=KO_MIN && (pct>=KO_CAP || i>=2)){
+      ko=true;
+      winner=pick.atk;
+      out.koPct=pct;
+     }
+    }
+   }
+   if(!ko){
+    // Last resort: the cat with more damage (or the forced winner's opponent) is KO'd.
+    if(forcedWinner) winner=forcedWinner;
+    else winner=(st.rp>=st.mp)?'morty':'roman';
+    const def=otherSide(winner);
+    const pct=def==='roman'?st.rp:st.mp;
+    if(pct<KO_MIN){
+     if(def==='roman') st.rp=KO_MIN; else st.mp=KO_MIN;
+     const bump=snap(st,{impact:1});
+     bump.t=t; t+=140;
+     out.keys.push(bump);
+     out.koPct=KO_MIN;
+    } else out.koPct=pct;
+    ko=true;
+   }
+
+   const loser=otherSide(winner);
+   const winId=winner==='roman'?romanId:mortyId;
+   const loseId=loser==='roman'?romanId:mortyId;
+   let finisher=opts.finisher;
+   const finIds=kitMoveIds(winId, 'finishers');
+   if(!finisher || finIds.indexOf(finisher)<0) finisher=rng.pick(finIds);
+
+   out.winner=winner;
+   out.finisher=finisher;
+   out.leadChanges=leadChanges;
    out.marks.finisher=t;
-   runBound('finishers', {id:finisher, atk:winner, atkId:winId, defId:loseId});
+   runBound('finishers', {id:finisher, atk:winner, atkId:winId, defId:loseId}, null);
 
-   const lastKey=out.keys[out.keys.length-1];
-   if(!lastKey || !lastKey.banner){
+   const lastK=out.keys[out.keys.length-1];
+   if(!lastK || !lastK.banner){
     const k=snap(st, {banner:1});
     k.t=t;
     k.ko=loser;
@@ -1853,7 +2096,7 @@ const FIGHT = __FIGHT__;
   node.textContent=v+'%';
   node.dataset.v=String(v);
   node.classList.remove('mid','high','ko');
-  if(v>=150) node.classList.add('ko');
+  if(v>=120) node.classList.add('ko');
   else if(v>=100) node.classList.add('high');
   else if(v>=50) node.classList.add('mid');
   if(v>prev){
@@ -1881,20 +2124,25 @@ const FIGHT = __FIGHT__;
   ghosts.push(g);
   setTimeout(function(){ if(g.parentNode) g.parentNode.removeChild(g); }, 260);
  }
+ function shakeAmt(dmg){
+  // Intensity comes only from this hit's damage, never the running total %.
+  const n=Math.max(0, +dmg||0);
+  const t=Math.max(0, Math.min(1, (n-1)/34));
+  return 1+t*13;
+ }
  function juice(dmg, flash){
   if(reduce) return;
-  const t=Math.max(0, Math.min(1, ((dmg||0)-3)/19));
-  const amt=2+t*12;
-  stage.style.setProperty('--shake', String(amt));
+  if(!(dmg>0) && !flash) return;
+  stage.style.setProperty('--shake', String(shakeAmt(dmg)));
   stage.classList.remove('shake','flash');
   void stage.offsetWidth;
   stage.classList.add('shake');
   if(flash) stage.classList.add('flash');
  }
  function resetFx(){
-  [callout,bolt,jolt,cloud,trail,arc,spark,qa,blast,romanKo,mortyKo,banner,sub].forEach(function(el){ showFx(el,false); });
-  romanEl.classList.remove('sparking','countering');
-  mortyEl.classList.remove('sparking','countering');
+  [callout,bolt,jolt,cloud,trail,arc,spark,shieldSpark,qa,blast,romanKo,mortyKo,banner,sub].forEach(function(el){ showFx(el,false); });
+  romanEl.classList.remove('sparking','countering','shielding','dodging','grabbing','thrown','shield-pop');
+  mortyEl.classList.remove('sparking','countering','shielding','dodging','grabbing','thrown','shield-pop');
   stage.classList.remove('shake','flash');
   clearGhosts();
   trail.className='blade-trail';
@@ -1975,6 +2223,28 @@ const FIGHT = __FIGHT__;
   const cn=lastKey(keys,'counter',now);
   romanEl.classList.toggle('countering', !!(cn && cn.counter==='roman' && now-cn.t<900));
   mortyEl.classList.toggle('countering', !!(cn && cn.counter==='morty' && now-cn.t<900));
+  const pop=lastKey(keys,'shieldPop',now);
+  const sh=lastKey(keys,'shield',now);
+  const romanPop=!!(pop && pop.shieldPop==='roman' && now-pop.t<280);
+  const mortyPop=!!(pop && pop.shieldPop==='morty' && now-pop.t<280);
+  romanEl.classList.toggle('shield-pop', romanPop);
+  mortyEl.classList.toggle('shield-pop', mortyPop);
+  romanEl.classList.toggle('shielding', !romanPop && !!(sh && sh.shield==='roman' && now-sh.t<420));
+  mortyEl.classList.toggle('shielding', !mortyPop && !!(sh && sh.shield==='morty' && now-sh.t<420));
+  const bk=lastKey(keys,'blockSpark',now);
+  if(bk && bk.blockSpark && now-bk.t<280){
+   placeAbs(shieldSpark, bk.blockSpark.x, bk.blockSpark.y||22);
+   showFx(shieldSpark,true);
+  } else showFx(shieldSpark,false);
+  const dg=lastKey(keys,'dodge',now);
+  romanEl.classList.toggle('dodging', !!(dg && dg.dodge==='roman' && now-dg.t<420));
+  mortyEl.classList.toggle('dodging', !!(dg && dg.dodge==='morty' && now-dg.t<420));
+  const gb=lastKey(keys,'grab',now);
+  romanEl.classList.toggle('grabbing', !!(gb && gb.grab==='roman' && now-gb.t<500));
+  mortyEl.classList.toggle('grabbing', !!(gb && gb.grab==='morty' && now-gb.t<500));
+  const th=lastKey(keys,'thrown',now);
+  romanEl.classList.toggle('thrown', !!(th && th.thrown==='roman' && now-th.t<400));
+  mortyEl.classList.toggle('thrown', !!(th && th.thrown==='morty' && now-th.t<400));
 
   const ko=lastKey(keys,'ko',now);
   showFx(romanKo, !!(ko && (ko.ko==='roman'||ko.ko==='both')));
