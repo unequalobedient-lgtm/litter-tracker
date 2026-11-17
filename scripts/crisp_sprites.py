@@ -172,12 +172,20 @@ def nn_downscale(frame: np.ndarray, div: int) -> np.ndarray:
     return np.array(im.resize((nw, nh), Image.Resampling.NEAREST))
 
 
-def quantize_sheet(frames: list[np.ndarray], colors: int = PALETTE_COLORS) -> list[np.ndarray]:
+def quantize_sheet(
+    frames: list[np.ndarray],
+    colors: int = PALETTE_COLORS,
+    method: int | None = None,
+) -> list[np.ndarray]:
     # Collect opaque pixels into a single image for a shared palette.
     pixels = [f[f[:, :, 3] >= 128][:, :3] for f in frames]
     pix = np.concatenate(pixels, axis=0) if pixels else np.zeros((1, 3), dtype=np.uint8)
     swatch = Image.fromarray(pix.reshape(1, -1, 3), "RGB")
-    pal_img = swatch.quantize(colors=colors, method=Image.Quantize.MEDIANCUT, dither=Image.Dither.NONE)
+    pal_img = swatch.quantize(
+        colors=colors,
+        method=Image.Quantize.MEDIANCUT if method is None else method,
+        dither=Image.Dither.NONE,
+    )
     palette = pal_img.getpalette()[: colors * 3]
 
     out = []

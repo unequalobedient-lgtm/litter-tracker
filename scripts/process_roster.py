@@ -105,21 +105,69 @@ def _drop_specks(rgba: np.ndarray, min_area: int = 40) -> np.ndarray:
         gap_x = max(0, cx0 - maxx, minx - cx1)
         gap_y = max(0, cy0 - maxy, miny - cy1)
         gap = max(gap_x, gap_y)
-        if area < min_area or (area < 280 and gap > 14):
+        if area < min_area:
+            drop = True
+        elif area < 320:
+            # Pixel distance to the main body, not just bbox gap — catches
+            # gutter crumbs that sit inside the body's bounding box.
+            dmin = 1e18
+            for i in range(0, len(arr), 32):
+                chunk = arr[i:i + 32].astype(np.float64)
+                d2 = ((chunk[:, None, :] - main[None, :, :].astype(np.float64)) ** 2).sum(axis=2).min()
+                if d2 < dmin:
+                    dmin = d2
+            drop = (dmin ** 0.5) > 20
+        else:
+            drop = False
+        if drop:
             for y, x in pts:
                 out[y, x, 3] = 0
     return out
 
 
+def _label_components(alpha: np.ndarray) -> tuple[np.ndarray, list[np.ndarray]]:
+    """8-connected component labels and (N,2) y,x point arrays."""
+    h, w = alpha.shape
+    labels = np.full((h, w), -1, dtype=np.int32)
+    comps: list[np.ndarray] = []
+    ys, xs = np.where(alpha)
+    cid = 0
+    for y0, x0 in zip(ys, xs):
+        if labels[y0, x0] >= 0:
+            continue
+        stack = [(int(y0), int(x0))]
+        labels[y0, x0] = cid
+        pts = []
+        while stack:
+            y, x = stack.pop()
+            pts.append((y, x))
+            for dy in (-1, 0, 1):
+                for dx in (-1, 0, 1):
+                    if dy == 0 and dx == 0:
+                        continue
+                    ny, nx = y + dy, x + dx
+                    if 0 <= ny < h and 0 <= nx < w and alpha[ny, nx] and labels[ny, nx] < 0:
+                        labels[ny, nx] = cid
+                        stack.append((ny, nx))
+        comps.append(np.array(pts, dtype=np.int32))
+        cid += 1
+    return labels, comps
+
+
 def equal_frames(rgba: np.ndarray, n: int = 5) -> list[np.ndarray]:
-    """Split a 5-pose sheet, assigning overflow (swords, tails, capes) to the nearest body."""
+    """Split a 5-pose sheet, keeping each prop/body component intact.
+
+    Overflow (swords, tails, capes, fireballs) stays with the body it
+    belongs to. Components that accidentally bridge two bodies are
+    Voronoi-split only between those bodies.
+    """
     h, w = rgba.shape[:2]
     alpha = rgba[:, :, 3] > 0
-    # Body centroids from the largest component inside each equal cell.
+    edges = np.array([int(round(w * i / n)) for i in range(n + 1)])
+
     centers = []
     for i in range(n):
-        x0 = int(round(w * i / n))
-        x1 = int(round(w * (i + 1) / n))
+        x0, x1 = int(edges[i]), int(edges[i + 1])
         c = _largest_component_centroid(alpha[:, x0:x1])
         if c is None:
             centers.append((0.5 * (x0 + x1), h * 0.6))
@@ -127,26 +175,67 @@ def equal_frames(rgba: np.ndarray, n: int = 5) -> list[np.ndarray]:
             centers.append((c[0] + x0, c[1]))
     centers_arr = np.array(centers)  # (n, 2) x,y
 
-    # Voronoi with a home-cell bias: pixels stay in their equal-split cell
-    # unless a neighboring body is clearly closer (swords/tails that crossed).
     ys, xs = np.where(alpha)
     if len(xs) == 0:
         return [rgba[:1, :1] for _ in range(n)]
-    pts = np.stack([xs, ys], axis=1).astype(np.float64)
-    d2 = ((pts[:, None, :] - centers_arr[None, :, :]) ** 2).sum(axis=2)
-    # Home cell using the same edges as the equal split.
-    edges = np.array([int(round(w * i / n)) for i in range(n + 1)])
-    home = np.searchsorted(edges, xs, side="right") - 1
-    home = np.clip(home, 0, n - 1)
-    d2[np.arange(len(xs)), home] -= 55.0 ** 2
-    labels = d2.argmin(axis=1)
+
+    _comp_labels, comps = _label_components(alpha)
+
+    # Body of a cell = component with the most pixels in the inner 70% of that cell.
+    # Using the interior avoids overflow tips electing a neighbor's body.
+    body_of = [None] * n
+    for i in range(n):
+        x0, x1 = int(edges[i]), int(edges[i + 1])
+        pad = int(0.15 * (x1 - x0))
+        inner0, inner1 = x0 + pad, x1 - pad
+        best_cid, best_n = None, 0
+        for cid, pts in enumerate(comps):
+            px = pts[:, 1]
+            count = int(np.count_nonzero((px >= inner0) & (px < inner1)))
+            if count > best_n:
+                best_n, best_cid = count, cid
+        body_of[i] = best_cid
+
+    owners_of: dict[int, list[int]] = {}
+    for i, cid in enumerate(body_of):
+        if cid is None:
+            continue
+        owners_of.setdefault(cid, []).append(i)
+
+    assign = np.full((h, w), -1, dtype=np.int16)
+    for cid, pts in enumerate(comps):
+        py, px = pts[:, 0], pts[:, 1]
+        owners = owners_of.get(cid, [])
+        if len(owners) == 1:
+            labels = np.full(len(pts), owners[0], dtype=np.int16)
+        elif len(owners) > 1:
+            pts_xy = np.stack([px, py], axis=1).astype(np.float64)
+            own = np.array(owners)
+            d2 = ((pts_xy[:, None, :] - centers_arr[None, own, :]) ** 2).sum(axis=2)
+            home = np.searchsorted(edges, px, side="right") - 1
+            home = np.clip(home, 0, n - 1)
+            for j, o in enumerate(owners):
+                d2[home == o, j] -= 55.0 ** 2
+            labels = own[d2.argmin(axis=1)].astype(np.int16)
+        else:
+            # Disconnected prop (fireball, block, muzzle flash, leftover crumb).
+            home = np.searchsorted(edges, px, side="right") - 1
+            home = np.clip(home, 0, n - 1)
+            # Tiny crumbs: give them to the nearest body so sword tips rejoin
+            # their blade. Larger props stay with the cell they mostly live in.
+            if len(pts) < 250:
+                pts_xy = np.stack([px, py], axis=1).astype(np.float64)
+                d2 = ((pts_xy[:, None, :] - centers_arr[None, :, :]) ** 2).sum(axis=2)
+                labels = d2.argmin(axis=1).astype(np.int16)
+            else:
+                # majority home
+                counts = np.bincount(home, minlength=n)
+                labels = np.full(len(pts), int(counts.argmax()), dtype=np.int16)
+        assign[py, px] = labels
 
     frames = []
     for i in range(n):
-        mask = np.zeros((h, w), dtype=bool)
-        sel = labels == i
-        mask[ys[sel], xs[sel]] = True
-        # Keep original rgba only where this label owns the pixel.
+        mask = assign == i
         owned = rgba.copy()
         owned[~mask, 3] = 0
         # Drop tiny disconnected specks (neighbor overflow) but keep
@@ -191,6 +280,7 @@ def process_sheet(
     colors: int,
     reorder: list[int] | None = None,
     replace: dict[int, np.ndarray] | None = None,
+    qmethod: int | None = None,
 ) -> dict:
     im = Image.open(path)
     rgba = chroma_rgba(im)
@@ -204,7 +294,7 @@ def process_sheet(
         for idx, fr in replace.items():
             print(f"  replace frame {idx} with {fr.shape[1]}x{fr.shape[0]}")
             scaled[idx] = fr
-    quantized = quantize_sheet(scaled, colors)
+    quantized = quantize_sheet(scaled, colors, method=qmethod)
     sheet, cw, ch, nf, ax, ay = pack_sheet(quantized)
     dest = OUT / f"{name}.png"
     sheet.save(dest, "PNG", optimize=True)
@@ -253,15 +343,21 @@ def main() -> None:
     )
 
     cats = [
-        ("luigi", "roman_luigi.jpg", "morty_luigi.jpg", None),
-        ("steve", "roman_steve.jpg", "morty_steve.jpg", None),
-        ("snake", "roman_snake.jpg", "morty_snake.jpg", None),
+        ("luigi", "roman_luigi.jpg", "morty_luigi.jpg", None, None),
+        # MAXCOVERAGE keeps the grass-green on the block; median-cut was
+        # eating it in favor of more black/brown/blue slots.
+        ("steve", "roman_steve.jpg", "morty_steve.jpg", None, Image.Quantize.MAXCOVERAGE),
+        ("snake", "roman_snake.jpg", "morty_snake.jpg", None, None),
     ]
-    for fid, roman, morty, reorder in cats:
+    for fid, roman, morty, reorder, qmethod in cats:
         print(f"\n=== {fid} roman ===")
-        metas[f"roman_{fid}"] = process_sheet(ROOT / roman, f"roman_{fid}", div=CAT_DIV, colors=CAT_COLORS, reorder=reorder)
+        metas[f"roman_{fid}"] = process_sheet(
+            ROOT / roman, f"roman_{fid}", div=CAT_DIV, colors=CAT_COLORS, reorder=reorder, qmethod=qmethod
+        )
         print(f"\n=== {fid} morty ===")
-        metas[f"morty_{fid}"] = process_sheet(ROOT / morty, f"morty_{fid}", div=CAT_DIV, colors=CAT_COLORS, reorder=reorder)
+        metas[f"morty_{fid}"] = process_sheet(
+            ROOT / morty, f"morty_{fid}", div=CAT_DIV, colors=CAT_COLORS, reorder=reorder, qmethod=qmethod
+        )
 
     # Sonic: source order is ready, kick, ball, jump, victory.
     # Target: ready, kick, jump, approved spinball, victory.

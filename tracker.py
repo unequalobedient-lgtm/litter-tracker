@@ -356,12 +356,12 @@ PAGE = r"""
  .fight-modal{position:relative;width:100%;max-width:520px;max-height:100vh;max-height:100dvh;overflow:auto;background:#0b0614;border:2px solid #e8c56b;border-radius:16px;padding:8px 12px 12px;box-sizing:border-box;-webkit-overflow-scrolling:touch;container-type:inline-size;container-name:fightmodal;-webkit-text-size-adjust:100%;text-size-adjust:100%}
  .fight-toolbar{height:32px;position:relative;margin-bottom:6px}
  .fight-close{position:absolute;top:0;right:0;width:32px;height:32px;border:0;border-radius:8px;background:#2a3240;color:#e8ecf1;font-size:22px;line-height:1;cursor:pointer;z-index:8}
- .fight-stage{position:relative;width:100%;aspect-ratio:16/9;border-radius:10px;overflow:hidden;background:#040014 center/100% 100% no-repeat;image-rendering:auto;box-shadow:inset 0 0 40px rgba(0,0,0,.45);container-type:size;container-name:fight}
+ .fight-stage{position:relative;width:100%;aspect-ratio:16/9;border-radius:10px;overflow:hidden;background:#040014 center/100% 100% no-repeat;image-rendering:auto;box-shadow:inset 0 0 40px rgba(0,0,0,.45);container-type:size;container-name:fight;--shake:7}
  .fight-world{position:absolute;left:0;top:0;width:492px;height:276.75px;transform-origin:0 0;transform:scale(calc(100cqw / 492));-webkit-text-size-adjust:100%;text-size-adjust:100%}
  .fight-stage.shake{animation:fightshake .35s}
  .fight-flash{position:absolute;inset:0;background:#fff6c0;opacity:0;pointer-events:none;z-index:7}
  .fight-stage.flash .fight-flash{animation:fightflash .28s}
- @keyframes fightshake{0%,100%{transform:translate(0,0)}20%{transform:translate(-7px,3px)}40%{transform:translate(7px,-4px)}60%{transform:translate(-5px,-2px)}80%{transform:translate(5px,3px)}}
+ @keyframes fightshake{0%,100%{transform:translate(0,0)}20%{transform:translate(calc(var(--shake) * -1px),calc(var(--shake) * .43px))}40%{transform:translate(calc(var(--shake) * 1px),calc(var(--shake) * -.57px))}60%{transform:translate(calc(var(--shake) * -.71px),calc(var(--shake) * -.29px))}80%{transform:translate(calc(var(--shake) * .71px),calc(var(--shake) * .43px))}}
  @keyframes fightflash{0%{opacity:.85}100%{opacity:0}}
  .smash-hud{position:absolute;bottom:6px;left:8px;right:8px;display:flex;justify-content:space-between;gap:8px;pointer-events:none;z-index:8}
  .p-hud{background:rgba(8,6,18,.82);border:2px solid #e8e8f0;border-radius:8px;padding:3px 10px 2px;min-width:100px;max-width:38%;box-sizing:border-box;flex:0 1 auto;box-shadow:0 2px 0 #000;-webkit-text-size-adjust:100%;text-size-adjust:100%}
@@ -1726,10 +1726,10 @@ const FIGHT = __FIGHT__;
    runBound('openings', opening);
    midPicks.forEach(function(p){ runBound('mids', p); });
 
-   const MIN_PCT=48;
+   const MIN_PCT=120;
    function loserPct(){ return loser==='morty'?st.mp:st.rp; }
    let pads=0;
-   while(loserPct()<MIN_PCT && pads<1 && heavy.length){
+   while(loserPct()<MIN_PCT && pads<12 && heavy.length){
     const hid=rng.pick(heavy);
     if(kitMove(winId,'mids',hid)){
      const p={id:hid, atk:winner, atkId:winId, defId:loseId};
@@ -1743,6 +1743,10 @@ const FIGHT = __FIGHT__;
     const bump=MIN_PCT+((typeof rng.ri==='function')?rng.ri(0,10):6);
     if(loser==='morty') st.mp=Math.max(st.mp, bump);
     else st.rp=Math.max(st.rp, bump);
+    const bumpKey=snap(st,{impact:1});
+    bumpKey.t=t;
+    t+=180;
+    out.keys.push(bumpKey);
    }
 
    out.marks.finisher=t;
@@ -1883,11 +1887,15 @@ const FIGHT = __FIGHT__;
   ghosts.push(g);
   setTimeout(function(){ if(g.parentNode) g.parentNode.removeChild(g); }, 260);
  }
- function juice(){
+ function juice(dmg, flash){
   if(reduce) return;
+  const t=Math.max(0, Math.min(1, ((dmg||0)-3)/19));
+  const amt=2+t*12;
+  stage.style.setProperty('--shake', String(amt));
   stage.classList.remove('shake','flash');
   void stage.offsetWidth;
-  stage.classList.add('shake','flash');
+  stage.classList.add('shake');
+  if(flash) stage.classList.add('flash');
  }
  function resetFx(){
   [callout,bolt,jolt,cloud,trail,arc,spark,qa,blast,romanKo,mortyKo,banner,sub].forEach(function(el){ showFx(el,false); });
@@ -2001,10 +2009,13 @@ const FIGHT = __FIGHT__;
   } else { blast.className='blast'; }
 
   if(impactsOk){
-   keys.forEach(function(k){
+   keys.forEach(function(k,i){
     if(k.impact && k.t<=now && k.t>lastImpact-10 && now-k.t<50){
      lastImpact=k.t;
-     juice();
+     const prev=i>0?keys[i-1]:null;
+     const dmg=prev?Math.max(0,(k.rp||0)-(prev.rp||0),(k.mp||0)-(prev.mp||0)):0;
+     const flash=!!(outcome.marks && outcome.marks.finisher!=null && k.t>=outcome.marks.finisher);
+     juice(dmg, flash);
     }
     if(k.afterimage && k.t<=now && now-k.t<40){
      spawnGhost(k.afterimage==='morty'?mortyEl:romanEl);
