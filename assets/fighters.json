@@ -1,0 +1,142 @@
+{
+  "roman_marth": {
+    "file": "fighters/roman_marth.png",
+    "sprite_w": 134,
+    "sprite_h": 126,
+    "frames": 4,
+    "anchor_x": 0.3209,
+    "anchor_y": 0.9603,
+    "colors": 23,
+    "bytes": 18299
+  },
+  "morty_pikachu": {
+    "file": "fighters/morty_pikachu.png",
+    "sprite_w": 105,
+    "sprite_h": 102,
+    "frames": 5,
+    "anchor_x": 0.5429,
+    "anchor_y": 0.9216,
+    "colors": 23,
+    "bytes": 23607
+  },
+  "roman_luigi": {
+    "file": "fighters/roman_luigi.png",
+    "sprite_w": 112,
+    "sprite_h": 82,
+    "frames": 5,
+    "anchor_x": 0.4375,
+    "anchor_y": 0.9634,
+    "colors": 25,
+    "bytes": 20745
+  },
+  "morty_luigi": {
+    "file": "fighters/morty_luigi.png",
+    "sprite_w": 122,
+    "sprite_h": 87,
+    "frames": 5,
+    "anchor_x": 0.4016,
+    "anchor_y": 0.8966,
+    "colors": 25,
+    "bytes": 21874
+  },
+  "roman_steve": {
+    "file": "fighters/roman_steve.png",
+    "sprite_w": 105,
+    "sprite_h": 99,
+    "frames": 5,
+    "anchor_x": 0.4381,
+    "anchor_y": 0.9192,
+    "colors": 25,
+    "bytes": 22485
+  },
+  "morty_steve": {
+    "file": "fighters/morty_steve.png",
+    "sprite_w": 92,
+    "sprite_h": 101,
+    "frames": 5,
+    "anchor_x": 0.3478,
+    "anchor_y": 0.8515,
+    "colors": 25,
+    "bytes": 23902
+  },
+  "roman_snake": {
+    "file": "fighters/roman_snake.png",
+    "sprite_w": 112,
+    "sprite_h": 89,
+    "frames": 5,
+    "anchor_x": 0.4643,
+    "anchor_y": 0.9101,
+    "colors": 25,
+    "bytes": 22226
+  },
+  "morty_snake": {
+    "file": "fighters/morty_snake.png",
+    "sprite_w": 104,
+    "sprite_h": 96,
+    "frames": 5,
+    "anchor_x": 0.4135,
+    "anchor_y": 0.875,
+    "colors": 25,
+    "bytes": 22603
+  },
+  "roman_sonic": {
+    "file": "fighters/roman_sonic.png",
+    "sprite_w": 106,
+    "sprite_h": 111,
+    "frames": 5,
+    "anchor_x": 0.434,
+    "anchor_y": 0.8108,
+    "colors": 25,
+    "bytes": 24698
+  },
+  "morty_sonic": {
+    "file": "fighters/morty_sonic.png",
+    "sprite_w": 102,
+    "sprite_h": 98,
+    "frames": 5,
+    "anchor_x": 0.451,
+    "anchor_y": 0.8265,
+    "colors": 25,
+    "bytes": 25145
+  },
+  "roman_pyra": {
+    "file": "fighters/roman_pyra.png",
+    "sprite_w": 87,
+    "sprite_h": 154,
+    "frames": 5,
+    "anchor_x": 0.5747,
+    "anchor_y": 0.8442,
+    "colors": 41,
+    "bytes": 31468
+  },
+  "morty_pyra": {
+    "file": "fighters/morty_pyra.png",
+    "sprite_w": 94,
+    "sprite_h": 167,
+    "frames": 5,
+    "anchor_x": 0.5638,
+    "anchor_y": 0.8563,
+    "colors": 41,
+    "bytes": 38855
+  },
+  "roman_mythra": {
+    "file": "fighters/roman_mythra.png",
+    "sprite_w": 97,
+    "sprite_h": 156,
+    "frames": 5,
+    "anchor_x": 0.5052,
+    "anchor_y": 0.859,
+    "colors": 41,
+    "bytes": 37742
+  },
+  "morty_mythra": {
+    "file": "fighters/morty_mythra.png",
+    "sprite_w": 90,
+    "sprite_h": 169,
+    "frames": 5,
+    "anchor_x": 0.5111,
+    "anchor_y": 0.8402,
+    "colors": 41,
+    "bytes": 38434
+  }
+}
