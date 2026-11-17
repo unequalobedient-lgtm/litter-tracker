@@ -281,11 +281,12 @@ def process_sheet(
     reorder: list[int] | None = None,
     replace: dict[int, np.ndarray] | None = None,
     qmethod: int | None = None,
+    n: int = 5,
 ) -> dict:
     im = Image.open(path)
     rgba = chroma_rgba(im)
     Image.fromarray(rgba, "RGBA").save(PREVIEW_DIR / f"{name}_keyed.png")
-    frames = equal_frames(rgba, 5)
+    frames = equal_frames(rgba, n)
     if reorder:
         frames = [frames[i] for i in reorder]
         print(f"  reordered -> {reorder}")
@@ -340,6 +341,16 @@ def main() -> None:
         Path("/workspace/litterapp/assets/morty_fight.png"),
         "morty_pikachu",
         existing["morty_fight"],
+    )
+
+    # Cross-sheets so both cats can roll Marth and Pikachu.
+    print("\n=== marth morty ===")
+    metas["morty_marth"] = process_sheet(
+        ROOT / "morty_marth.jpg", "morty_marth", div=CAT_DIV, colors=CAT_COLORS, n=4
+    )
+    print("\n=== pikachu roman ===")
+    metas["roman_pikachu"] = process_sheet(
+        ROOT / "roman_pikachu.jpg", "roman_pikachu", div=CAT_DIV, colors=CAT_COLORS, n=5
     )
 
     cats = [

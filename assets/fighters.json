@@ -19,6 +19,26 @@
     "colors": 23,
     "bytes": 23607
   },
+  "morty_marth": {
+    "file": "fighters/morty_marth.png",
+    "sprite_w": 145,
+    "sprite_h": 147,
+    "frames": 4,
+    "anchor_x": 0.3103,
+    "anchor_y": 0.9184,
+    "colors": 25,
+    "bytes": 26961
+  },
+  "roman_pikachu": {
+    "file": "fighters/roman_pikachu.png",
+    "sprite_w": 94,
+    "sprite_h": 92,
+    "frames": 5,
+    "anchor_x": 0.4043,
+    "anchor_y": 0.9457,
+    "colors": 24,
+    "bytes": 21354
+  },
   "roman_luigi": {
     "file": "fighters/roman_luigi.png",
     "sprite_w": 99,

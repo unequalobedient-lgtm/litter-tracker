@@ -168,14 +168,8 @@ def fight_payload(meta: dict) -> dict:
         return rec
 
     roster = {
-        "marth": {
-            "name": "MARTH",
-            "roman": _pack_fighter(fighters["roman_marth"], 1),
-        },
-        "pikachu": {
-            "name": "PIKACHU",
-            "morty": _pack_fighter(fighters["morty_pikachu"], 1),
-        },
+        "marth": both("marth"),
+        "pikachu": both("pikachu"),
         "luigi": both("luigi"),
         "steve": both("steve"),
         "sonic": both("sonic"),
