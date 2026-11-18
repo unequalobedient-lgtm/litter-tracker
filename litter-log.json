@@ -226,5 +226,17 @@
     "weight_kg": 7.548,
     "weight_lb": 16.64,
     "duration_seconds": 50
+  },
+  {
+    "timestamp": "2026-11-18T03:20:16+00:00",
+    "weight_kg": 7.573,
+    "weight_lb": 16.696,
+    "duration_seconds": 29
+  },
+  {
+    "timestamp": "2026-11-18T03:35:40+00:00",
+    "weight_kg": 6.478,
+    "weight_lb": 14.282,
+    "duration_seconds": 71
   }
 ]
