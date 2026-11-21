@@ -646,5 +646,35 @@
     "weight_kg": 6.333,
     "weight_lb": 13.962,
     "duration_seconds": 99
+  },
+  {
+    "timestamp": "2026-11-21T17:38:10+00:00",
+    "weight_kg": 7.521,
+    "weight_lb": 16.581,
+    "duration_seconds": 31
+  },
+  {
+    "timestamp": "2026-11-21T17:49:30+00:00",
+    "weight_kg": 7.543,
+    "weight_lb": 16.629,
+    "duration_seconds": 19
+  },
+  {
+    "timestamp": "2026-11-21T17:55:39+00:00",
+    "weight_kg": 7.525,
+    "weight_lb": 16.59,
+    "duration_seconds": 32
+  },
+  {
+    "timestamp": "2026-11-21T18:14:22+00:00",
+    "weight_kg": 7.542,
+    "weight_lb": 16.627,
+    "duration_seconds": 24
+  },
+  {
+    "timestamp": "2026-11-21T18:30:32+00:00",
+    "weight_kg": 7.552,
+    "weight_lb": 16.649,
+    "duration_seconds": 31
   }
 ]
