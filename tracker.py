@@ -100,45 +100,434 @@ def load_latest_status():
     return None
 
 
+def load_status_history() -> list:
+    for path in (STATUS, HERE / "public" / "status.json"):
+        if not path.is_file():
+            continue
+        try:
+            data = json.loads(path.read_text())
+        except Exception:
+            continue
+        hist = data.get("history") if isinstance(data, dict) else data
+        if hist:
+            return list(hist)
+    return []
+
+
+def _dp21_int(entry) -> int | None:
+    if not entry:
+        return None
+    val = entry.get("dp21")
+    if val is None:
+        return None
+    try:
+        return int(val)
+    except (TypeError, ValueError):
+        return None
+
+
+def _bit_on(entry, bit: int) -> bool | None:
+    if not entry:
+        return None
+    bits = entry.get("dp21_bits")
+    if isinstance(bits, list):
+        return bit in bits
+    n = _dp21_int(entry)
+    if n is None:
+        return None
+    return bool(n & (1 << bit))
+
+
+def bin_status(history: list | None = None) -> dict:
+    """Confirmed: DP 21 bit 0 is the waste-bin-full flag."""
+    hist = history if history is not None else load_status_history()
+    last_full_since = None
+    last_emptied = None
+    prev_full = None
+    latest = hist[-1] if hist else None
+    for entry in hist:
+        full = _bit_on(entry, 0)
+        if full is None:
+            continue
+        changed = entry.get("dp21_changed_at") or entry.get("recorded_at")
+        if prev_full is None:
+            if full:
+                last_full_since = changed
+            # First snapshot already clear: do not treat that as an emptying.
+        elif full and not prev_full:
+            last_full_since = changed
+        elif (not full) and prev_full:
+            last_emptied = changed
+        prev_full = full
+    is_full = prev_full is True
+    other_bits = []
+    n = _dp21_int(latest) if latest else None
+    if n is not None:
+        other_bits = [b for b in range(1, 8) if n & (1 << b)]
+    elif latest:
+        other_bits = [b for b in (latest.get("dp21_bits") or []) if b != 0]
+    return {
+        "is_full": is_full,
+        "full_since": last_full_since,
+        "last_emptied": last_emptied,
+        "other_bits": other_bits,
+        "latest": latest,
+    }
+
+
 def waste_card_html() -> str:
-    latest = load_latest_status()
+    info = bin_status()
+    latest = info["latest"]
     if not latest:
         return (
             '<div class="card waste">'
             '<div class="head"><div><div class="name">Waste bin</div>'
-            '<div class="sub">Experimental &middot; waiting for the next cloud refresh</div></div></div>'
-            '<div class="caption">Notification flags will show up here after the box is queried. '
-            "This is a best-guess channel and still needs calibration.</div></div>"
+            '<div class="sub">Waiting for the next cloud refresh</div></div></div>'
+            '<div class="caption">The bin-full badge will show up here after the box is queried.</div></div>'
         )
-    dp21, dp22, dp7 = latest.get("dp21"), latest.get("dp22"), latest.get("dp7")
-    b21, b22 = latest.get("dp21_bits") or [], latest.get("dp22_bits") or []
-    updated = fmt_iso_et(latest.get("recorded_at"))
-    changed = fmt_iso_et(latest.get("dp21_changed_at"))
+    dp7 = latest.get("dp7")
     visits = "—" if dp7 is None else str(dp7)
-    bit_pills = (
-        "".join(f'<span class="pill on">bit {b} on</span>' for b in b21)
-        if b21
-        else '<span class="pill">no notification bits set</span>'
+    updated = fmt_iso_et(latest.get("recorded_at"))
+    if info["is_full"]:
+        state_cls = "full"
+        badge = '<div class="binbadge full">Bin full — empty it</div>'
+        since = fmt_iso_et(info["full_since"])
+        since_html = f'<div class="bin-since">Full since {since}</div>'
+    else:
+        state_cls = "ok"
+        badge = '<div class="binbadge ok">Bin OK</div>'
+        since_html = ""
+    emptied = info["last_emptied"]
+    emptied_html = (
+        f'<div class="bin-emptied">Last emptied {fmt_iso_et(emptied)}</div>'
+        if emptied
+        else '<div class="bin-emptied">Last emptied unknown</div>'
     )
-    fault = bits_phrase(dp22, b22)
+    other_html = ""
+    if info["other_bits"]:
+        other_html = '<div class="muted">other status flag (unknown)</div>'
     return (
-        '<div class="card waste">'
+        f'<div class="card waste {state_cls}">'
         '<div class="head"><div><div class="name">Waste bin</div>'
-        '<div class="sub">Experimental best-guess &middot; needs calibration</div></div></div>'
+        '<div class="sub">Confirmed bin-full signal</div></div></div>'
+        f"{badge}"
+        f"{since_html}"
+        f"{emptied_html}"
         '<div class="wastegrid">'
         f'<div class="stat"><div class="num">{visits}</div><div class="lbl">visits today</div></div>'
-        f'<div class="stat"><div class="num">DP 21</div><div class="lbl">notify flags</div></div>'
-        f'<div class="stat"><div class="num">DP 22</div><div class="lbl">fault flags</div></div>'
         "</div>"
-        f'<div class="flagrow">{bit_pills}</div>'
-        f'<div class="bits">Notification flags: {bits_phrase(dp21, b21)}</div>'
-        f'<div class="bits">Fault flags: {fault}</div>'
-        '<div class="warn">We do not yet know which DP 21 bit means the waste bin is full. '
-        "When the box says it is full, note the time so the exact bit can be locked in.</div>"
-        f'<div class="last">Flags last changed {changed} &middot; Snapshot {updated}</div>'
+        f"{other_html}"
+        f'<div class="last">Snapshot {updated}</div>'
         "</div>"
     )
 
+
+def _inlier_weights(cv, baseline: float, max_delta: float = 3.0) -> list:
+    weights = [v["weight_lb"] for v in cv]
+    if not weights:
+        return []
+    mid = statistics.median(weights)
+    # Prefer the observed median, but ignore scale blips far from it.
+    ref = mid
+    return [v for v in cv if abs(v["weight_lb"] - ref) <= max_delta]
+
+
+def _daily_weight_avgs(cv) -> list[tuple]:
+    by_day: dict = {}
+    for v in cv:
+        d = v["dt"].date()
+        by_day.setdefault(d, []).append(v["weight_lb"])
+    return [(d, sum(ws) / len(ws)) for d, ws in sorted(by_day.items())]
+
+
+def _daily_visit_counts(cv) -> dict:
+    counts: dict = {}
+    for v in cv:
+        d = v["dt"].date()
+        counts[d] = counts.get(d, 0) + 1
+    return counts
+
+
+def _mean(xs):
+    return sum(xs) / len(xs) if xs else None
+
+
+def _fmt_delta_lb(delta) -> str:
+    if delta is None:
+        return "—"
+    sign = "+" if delta > 0 else ""
+    return f"{sign}{delta:.2f} lb"
+
+
+def _delta_chip(label: str, delta) -> str:
+    if delta is None:
+        return f'<span class="h-chip">{label}: —</span>'
+    cls = "up" if delta > 0.04 else ("down" if delta < -0.04 else "")
+    return f'<span class="h-chip {cls}">{label}: {_fmt_delta_lb(delta)}</span>'
+
+
+def _sparkline_svg(points: list[tuple], color: str) -> str:
+    if not points:
+        return '<div class="nochart">Not enough weight history yet</div>'
+    w, h, pad_l, pad_r, pad_t, pad_b = 280, 44, 6, 6, 8, 10
+    ys = [p[1] for p in points]
+    y_min, y_max = min(ys), max(ys)
+    if y_max - y_min < 0.15:
+        mid = (y_min + y_max) / 2
+        y_min, y_max = mid - 0.15, mid + 0.15
+    inner_w = w - pad_l - pad_r
+    inner_h = h - pad_t - pad_b
+
+    def x_at(i, n):
+        if n <= 1:
+            return pad_l + inner_w / 2
+        return pad_l + inner_w * i / (n - 1)
+
+    def y_at(val):
+        return pad_t + inner_h * (1 - (val - y_min) / (y_max - y_min))
+
+    n = len(points)
+    coords = [(x_at(i, n), y_at(val)) for i, (_d, val) in enumerate(points)]
+    poly = " ".join(f"{x:.1f},{y:.1f}" for x, y in coords)
+    dots = "".join(
+        f'<circle cx="{x:.1f}" cy="{y:.1f}" r="2" fill="{color}"></circle>'
+        for x, y in coords
+    )
+    first_lab = points[0][0].strftime("%b %-d")
+    last_lab = points[-1][0].strftime("%b %-d")
+    return (
+        f'<svg class="spark" viewBox="0 0 {w} {h}" preserveAspectRatio="none" aria-hidden="true">'
+        f'<polyline fill="none" stroke="{color}" stroke-width="1.8" points="{poly}"></polyline>'
+        f"{dots}"
+        f'<text class="axl" x="{pad_l}" y="{h - 1}">{first_lab}</text>'
+        f'<text class="axl" x="{w - pad_r}" y="{h - 1}" text-anchor="end">{last_lab}</text>'
+        "</svg>"
+    )
+
+
+def _visit_bars_html(days: list, counts: dict, flagged_days: set) -> str:
+    if not days:
+        return ""
+    max_n = max([counts.get(d, 0) for d in days] + [8])
+    cols = []
+    for d in days:
+        n = counts.get(d, 0)
+        pct = 8 if n == 0 else max(8, int(round(100 * n / max_n)))
+        flagged = " flagged" if d in flagged_days else ""
+        label = d.strftime("%-d")
+        num = "" if n == 0 else str(n)
+        cols.append(
+            f'<div class="vbar-col{flagged}" title="{d.strftime("%b %-d")}: {n} visit{"s" if n != 1 else ""}">'
+            f'<div class="vbar-n">{num}</div>'
+            f'<div class="vbar" style="height:{pct}%"></div>'
+            f'<div class="vbar-d">{label}</div>'
+            "</div>"
+        )
+    return '<div class="vbars">' + "".join(cols) + "</div>"
+
+
+def _trailing_median(counts: dict, day, span: int = 7, history_start=None) -> float:
+    vals = []
+    for i in range(1, span + 1):
+        d = day - timedelta(days=i)
+        if history_start and d < history_start:
+            continue
+        vals.append(counts.get(d, 0))
+    return statistics.median(vals) if vals else 0
+
+
+def _short_visit_clusters(cv, short_sec: int = 60, gap_min: int = 40, min_short: int = 5) -> list:
+    """Merge visits into bouts (gap <= gap_min) and keep those with many short visits."""
+    if not cv:
+        return []
+    ordered = sorted(cv, key=lambda v: v["dt"])
+    bouts = [[ordered[0]]]
+    gap = timedelta(minutes=gap_min)
+    for v in ordered[1:]:
+        if v["dt"] - bouts[-1][-1]["dt"] <= gap:
+            bouts[-1].append(v)
+        else:
+            bouts.append([v])
+    clusters = []
+    for bout in bouts:
+        short_n = sum(1 for v in bout if int(v["duration_seconds"]) <= short_sec)
+        if short_n >= min_short:
+            clusters.append({
+                "start": bout[0]["dt"],
+                "end": bout[-1]["dt"],
+                "n": len(bout),
+                "short_n": short_n,
+                "day": bout[0]["dt"].date(),
+            })
+    return clusters
+
+
+def _fmt_cluster_range(c) -> str:
+    start, end = c["start"], c["end"]
+    if start.date() == end.date():
+        return f"{start.strftime('%-I:%M %p')}–{end.strftime('%-I:%M %p')}"
+    return f"{start.strftime('%b %-d %-I:%M %p')}–{end.strftime('%b %-d %-I:%M %p')}"
+
+
+def cat_health(name: str, visits: list, now: datetime) -> dict:
+    cv = [v for v in visits if v["cat"] == name]
+    baseline = 13.0 if name == "Roman" else 16.0
+    inliers = _inlier_weights(cv, baseline)
+    daily_w = _daily_weight_avgs(inliers)
+    counts = _daily_visit_counts(cv)
+    today = now.date()
+
+    latest_avg = daily_w[-1][1] if daily_w else None
+    # 7-day change: mean of last 7 daily avgs vs mean of the 7 days before that.
+    recent7 = [avg for d, avg in daily_w if d >= today - timedelta(days=6)]
+    prev7 = [avg for d, avg in daily_w if today - timedelta(days=13) <= d <= today - timedelta(days=7)]
+    delta7 = None
+    if recent7 and prev7:
+        delta7 = _mean(recent7) - _mean(prev7)
+    elif recent7 and daily_w and daily_w[0][0] < today - timedelta(days=3) and len(daily_w) >= 4:
+        earlier = [avg for d, avg in daily_w if d < today - timedelta(days=6)]
+        if earlier:
+            delta7 = _mean(recent7) - _mean(earlier)
+
+    last30 = [avg for d, avg in daily_w if d >= today - timedelta(days=29)]
+    prev30 = [avg for d, avg in daily_w if today - timedelta(days=59) <= d <= today - timedelta(days=30)]
+    delta30 = None
+    delta30_label = "30d"
+    if last30 and prev30:
+        delta30 = _mean(last30) - _mean(prev30)
+    elif last30 and daily_w and daily_w[0][0] > today - timedelta(days=27):
+        # Not a full 30 days of history: compare recent week vs the start of the log.
+        start_span = [avg for d, avg in daily_w if d <= daily_w[0][0] + timedelta(days=2)]
+        if start_span and recent7 and daily_w[0][0] < today - timedelta(days=3):
+            delta30 = _mean(recent7) - _mean(start_span)
+            delta30_label = f"since {daily_w[0][0].strftime('%b %-d')}"
+
+    flags = []
+    flagged_days = set()
+    start_14 = today - timedelta(days=13)
+    days_14 = [start_14 + timedelta(days=i) for i in range(14)]
+
+    # Visit spikes over the last 30 days (so Nov 15/19 still show after two weeks).
+    lookback_start = today - timedelta(days=29)
+    all_days = []
+    d = lookback_start
+    while d <= today:
+        all_days.append(d)
+        d += timedelta(days=1)
+
+    history_start = min((v["dt"].date() for v in cv), default=None)
+    spike_days = []
+    for day in all_days:
+        n = counts.get(day, 0)
+        if n < 8:
+            continue
+        med = _trailing_median(counts, day, 7, history_start)
+        if n >= 2 * med:
+            spike_days.append((day, n, med))
+            flagged_days.add(day)
+
+    clusters = [c for c in _short_visit_clusters(cv) if c["day"] >= lookback_start]
+    clusters_by_day: dict = {}
+    for c in clusters:
+        clusters_by_day.setdefault(c["day"], []).append(c)
+        flagged_days.add(c["day"])
+
+    flag_days = sorted(set([d for d, _n, _m in spike_days]) | set(clusters_by_day))
+    for day in flag_days:
+        spike = next((s for s in spike_days if s[0] == day), None)
+        bouts = clusters_by_day.get(day) or []
+        day_txt = day.strftime("%b %-d")
+        parts = []
+        if spike:
+            n, med = spike[1], spike[2]
+            if med < 1:
+                parts.append(f"{n} visits (well above the usual daily count)")
+            else:
+                usual = f"{med:.0f}" if float(med) == int(med) else f"{med:.1f}"
+                parts.append(f"{n} visits (usual about {usual}/day)")
+        if bouts:
+            ranges = ", ".join(_fmt_cluster_range(c) for c in bouts)
+            if len(bouts) == 1:
+                parts.append(f"a cluster of short visits at {ranges} ET")
+            else:
+                if len(bouts) == 2:
+                    joined = f"{_fmt_cluster_range(bouts[0])} and {_fmt_cluster_range(bouts[1])}"
+                else:
+                    joined = (
+                        ", ".join(_fmt_cluster_range(c) for c in bouts[:-1])
+                        + f", and {_fmt_cluster_range(bouts[-1])}"
+                    )
+                parts.append(f"clusters of short visits at {joined} ET")
+        if parts:
+            flags.append(f"{day_txt}: " + ", including ".join(parts) if spike and bouts else f"{day_txt}: " + "; ".join(parts))
+
+    # Sudden weight drop: recent 2-day inlier avg vs prior 14-day avg, >5%.
+    recent_cut = today - timedelta(days=1)
+    prior_start = today - timedelta(days=15)
+    recent_w = [avg for d, avg in daily_w if d >= recent_cut]
+    prior_w = [avg for d, avg in daily_w if prior_start <= d < recent_cut]
+    if recent_w and prior_w and _mean(prior_w):
+        recent_m, prior_m = _mean(recent_w), _mean(prior_w)
+        drop_pct = (prior_m - recent_m) / prior_m * 100
+        if drop_pct >= 5:
+            flags.append(
+                f"Weight down {drop_pct:.0f}% vs the prior two weeks "
+                f"({recent_m:.2f} lb vs {prior_m:.2f} lb)"
+            )
+
+    return {
+        "name": name,
+        "latest_avg": latest_avg,
+        "delta7": delta7,
+        "delta30": delta30,
+        "delta30_label": delta30_label,
+        "daily_w": daily_w,
+        "counts": counts,
+        "days_14": days_14,
+        "flags": flags,
+        "flagged_days": flagged_days,
+        "n_visits": len(cv),
+    }
+
+
+def health_view_html(visits: list, now: datetime) -> str:
+    note = (
+        "Frequent short visits can mean a urinary problem — call the vet; "
+        "a male cat straining with little or no urine is an emergency."
+    )
+    cards = []
+    for name, color in CAT_COLORS.items():
+        h = cat_health(name, visits, now)
+        if h["latest_avg"] is not None:
+            weight_num = f'{h["latest_avg"]:.2f}'
+        else:
+            weight_num = "—"
+        chips = _delta_chip("7d", h["delta7"]) + _delta_chip(h["delta30_label"], h["delta30"])
+        if h["flags"]:
+            flag_html = "".join(f'<div class="flag warn">{f}</div>' for f in h["flags"])
+        else:
+            flag_html = '<div class="flag ok">No visit spikes or sudden weight changes</div>'
+        spark = _sparkline_svg(h["daily_w"][-30:], color)
+        bars = _visit_bars_html(h["days_14"], h["counts"], h["flagged_days"])
+        cards.append(
+            f'<div class="card health" data-health="{name}">'
+            f'<div class="name">{name}</div>'
+            f'<div class="h-flags">{flag_html}</div>'
+            '<div class="h-row"><div class="h-k">Weight trend</div>'
+            f'<div class="h-v">{weight_num} lb</div></div>'
+            f'<div class="h-deltas">{chips}</div>'
+            f"{spark}"
+            '<div class="h-k">Visits per day (last 14 days)</div>'
+            f"{bars}"
+            "</div>"
+        )
+    return (
+        '<section class="health-sec" aria-label="Health">'
+        "<h2>Health</h2>"
+        + "".join(cards)
+        + f'<div class="health-note">{note}</div>'
+        "</section>"
+    )
 
 def _pack_fighter(info: dict, display: float = 1) -> dict:
     return {
@@ -310,6 +699,7 @@ def main():
     html = (
         PAGE.replace("__CARDS__", "\n".join(cards))
         .replace("__WASTE__", waste_card_html())
+        .replace("__HEALTH__", health_view_html(visits, now))
         .replace("__UPDATED__", now.strftime("%b %-d, %Y at %-I:%M %p ET"))
         .replace("__NEW__", str(new))
         .replace("__TOTAL__", str(len(visits)))
@@ -465,10 +855,43 @@ PAGE = r"""
  .visit .pee{color:#7ec8e3}
  .visit .poop{color:#d6b07a}
  .empty-list{color:#6b7684;font-size:13px;padding:16px;text-align:center}
+
+ .card.waste.full{border-color:#b4533a}
+ .card.waste.ok{border-color:#3d5340}
+ .binbadge{display:inline-flex;align-items:center;font-weight:800;font-size:18px;border-radius:10px;padding:10px 14px;margin:0 0 10px;line-height:1.2}
+ .binbadge.full{background:#4a2218;color:#ffb089;border:1px solid #c45c3e}
+ .binbadge.ok{background:#163027;color:#8fd4a8;border:1px solid #2e6b4a}
+ .bin-since,.bin-emptied{font-size:13px;color:#c5cdd8;margin:4px 0;line-height:1.4}
+ .waste .muted{color:#6b7684;font-size:11px;margin-top:8px}
+ .wastegrid{grid-template-columns:repeat(auto-fit,minmax(96px,1fr))}
+ .health-sec{margin:0 0 18px}
+ .health-sec > h2{font-size:16px;margin:0 0 10px;font-weight:700;letter-spacing:.04em}
+ .card.health{padding:16px}
+ .health .name{margin-bottom:10px}
+ .h-flags{display:flex;flex-direction:column;gap:8px;margin:0 0 12px}
+ .flag.warn{background:#3a2216;color:#f0c27a;border:1px solid #6a4a2a}
+ .flag.ok{background:#163027;color:#8fd4a8}
+ .h-row{display:flex;justify-content:space-between;align-items:baseline;gap:8px;margin:0 0 6px}
+ .h-k{color:#8b96a5;font-size:12px}
+ .h-v{font-size:16px;font-weight:700}
+ .h-deltas{display:flex;gap:8px;flex-wrap:wrap;margin:0 0 8px}
+ .h-chip{background:#131821;border-radius:999px;padding:4px 10px;font-size:12px;color:#c5cdd8}
+ .h-chip.down{color:#f0b36b}
+ .h-chip.up{color:#8fd4a8}
+ .spark{width:100%;height:48px;display:block;margin:0 0 12px}
+ .vbars{display:flex;align-items:flex-end;gap:3px;height:96px;margin:8px 0 2px}
+ .vbar-col{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;min-width:0;height:100%}
+ .vbar-n{font-size:9px;color:#c5cdd8;line-height:1;margin-bottom:3px;height:10px}
+ .vbar{width:100%;max-width:16px;background:#4a5d72;border-radius:3px 3px 0 0;min-height:2px}
+ .vbar-col.flagged .vbar{background:#c4843a}
+ .vbar-col.flagged .vbar-n{color:#f0c27a;font-weight:700}
+ .vbar-d{font-size:9px;color:#6b7684;margin-top:4px}
+ .health-note{color:#8b96a5;font-size:12px;line-height:1.45;margin:4px 0 0}
 </style></head><body><div class="wrap">
  <h1>&#128062; Litter Box Tracker</h1>
  <div class="meta">Updated __UPDATED__ &middot; __NEW__ new visits this run &middot; __TOTAL__ logged</div>
  __WASTE__
+ __HEALTH__
  <div class="fightbar"><button type="button" id="fight-btn" class="fightbtn">&#9876; FIGHT</button></div>
  __CARDS__
  <div class="meta">Weights read from the box scale, sorted to the nearest cat. The box can't tell them apart on its own, so an occasional visit may land on the wrong cat.</div>
