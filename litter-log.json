@@ -1012,5 +1012,47 @@
     "weight_kg": 7.548,
     "weight_lb": 16.64,
     "duration_seconds": 21
+  },
+  {
+    "timestamp": "2026-11-23T19:27:11+00:00",
+    "weight_kg": 6.416,
+    "weight_lb": 14.145,
+    "duration_seconds": 40
+  },
+  {
+    "timestamp": "2026-11-23T19:30:44+00:00",
+    "weight_kg": 6.432,
+    "weight_lb": 14.18,
+    "duration_seconds": 47
+  },
+  {
+    "timestamp": "2026-11-23T19:33:34+00:00",
+    "weight_kg": 6.382,
+    "weight_lb": 14.07,
+    "duration_seconds": 135
+  },
+  {
+    "timestamp": "2026-11-23T19:37:51+00:00",
+    "weight_kg": 6.436,
+    "weight_lb": 14.189,
+    "duration_seconds": 77
+  },
+  {
+    "timestamp": "2026-11-23T19:55:32+00:00",
+    "weight_kg": 7.535,
+    "weight_lb": 16.612,
+    "duration_seconds": 63
+  },
+  {
+    "timestamp": "2026-11-23T20:52:38+00:00",
+    "weight_kg": 7.55,
+    "weight_lb": 16.645,
+    "duration_seconds": 93
+  },
+  {
+    "timestamp": "2026-11-23T23:17:43+00:00",
+    "weight_kg": 7.543,
+    "weight_lb": 16.629,
+    "duration_seconds": 20
   }
 ]
