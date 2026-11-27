@@ -1444,5 +1444,101 @@
     "weight_kg": 7.61,
     "weight_lb": 16.777,
     "duration_seconds": 19
+  },
+  {
+    "timestamp": "2026-11-26T19:25:09+00:00",
+    "weight_kg": 7.654,
+    "weight_lb": 16.874,
+    "duration_seconds": 24
+  },
+  {
+    "timestamp": "2026-11-26T19:36:34+00:00",
+    "weight_kg": 7.571,
+    "weight_lb": 16.691,
+    "duration_seconds": 27
+  },
+  {
+    "timestamp": "2026-11-26T19:47:40+00:00",
+    "weight_kg": 7.551,
+    "weight_lb": 16.647,
+    "duration_seconds": 32
+  },
+  {
+    "timestamp": "2026-11-26T19:56:36+00:00",
+    "weight_kg": 7.578,
+    "weight_lb": 16.707,
+    "duration_seconds": 25
+  },
+  {
+    "timestamp": "2026-11-26T20:19:45+00:00",
+    "weight_kg": 7.614,
+    "weight_lb": 16.786,
+    "duration_seconds": 20
+  },
+  {
+    "timestamp": "2026-11-26T20:36:38+00:00",
+    "weight_kg": 7.628,
+    "weight_lb": 16.817,
+    "duration_seconds": 20
+  },
+  {
+    "timestamp": "2026-11-26T21:00:14+00:00",
+    "weight_kg": 7.657,
+    "weight_lb": 16.881,
+    "duration_seconds": 18
+  },
+  {
+    "timestamp": "2026-11-26T21:08:47+00:00",
+    "weight_kg": 7.647,
+    "weight_lb": 16.859,
+    "duration_seconds": 28
+  },
+  {
+    "timestamp": "2026-11-26T21:11:52+00:00",
+    "weight_kg": 7.65,
+    "weight_lb": 16.865,
+    "duration_seconds": 24
+  },
+  {
+    "timestamp": "2026-11-26T21:30:08+00:00",
+    "weight_kg": 7.661,
+    "weight_lb": 16.89,
+    "duration_seconds": 28
+  },
+  {
+    "timestamp": "2026-11-27T00:03:35+00:00",
+    "weight_kg": 7.557,
+    "weight_lb": 16.66,
+    "duration_seconds": 23
+  },
+  {
+    "timestamp": "2026-11-27T00:14:45+00:00",
+    "weight_kg": 7.55,
+    "weight_lb": 16.645,
+    "duration_seconds": 19
+  },
+  {
+    "timestamp": "2026-11-27T00:24:37+00:00",
+    "weight_kg": 7.561,
+    "weight_lb": 16.669,
+    "duration_seconds": 16
+  },
+  {
+    "timestamp": "2026-11-27T00:38:11+00:00",
+    "weight_kg": 6.489,
+    "weight_lb": 14.306,
+    "duration_seconds": 81
+  },
+  {
+    "timestamp": "2026-11-27T00:41:32+00:00",
+    "weight_kg": 7.656,
+    "weight_lb": 16.879,
+    "duration_seconds": 25
+  },
+  {
+    "timestamp": "2026-11-27T00:48:43+00:00",
+    "weight_kg": 7.691,
+    "weight_lb": 16.956,
+    "duration_seconds": 108
   }
 ]
